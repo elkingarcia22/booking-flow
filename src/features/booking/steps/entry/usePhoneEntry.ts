@@ -2,6 +2,7 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { describeError } from "@/lib/api";
 import { useBookingFlow } from "../../flow/BookingContext";
+import { toastMissing } from "../../flow/missingData";
 import { useRequestCodeMutation } from "../../queries";
 
 /** Dígitos mínimos de un celular nacional (Colombia y EE. UU. tienen 10). */
@@ -26,7 +27,7 @@ export function usePhoneEntry() {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    if (!isValid) return;
+    if (toastMissing(t, [!isValid && t("booking.phone.invalid")])) return;
     lookup.mutate(phone, { onSuccess: (sent) => dispatch({ type: "codeSent", phone, sentTo: sent.sentTo, channel: sent.channel }) });
   };
 

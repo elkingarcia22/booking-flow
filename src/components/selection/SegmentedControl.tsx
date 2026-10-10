@@ -100,7 +100,7 @@ export function SegmentedControl({
                 variant === 'solid' && cn(
                   'rounded-md',
                   isActive
-                    ? 'bg-surface text-primary shadow-card'
+                    ? 'bg-surface text-primary shadow-card ring-1 ring-border'
                     : 'text-text-secondary hover:text-text-primary'
                 ),
 
@@ -124,7 +124,7 @@ export function SegmentedControl({
               )}
             >
               <div className="flex items-center gap-2">
-                {Icon && <Icon className={cn('h-3.5 w-3.5', isActive ? 'opacity-100' : 'opacity-60')} />}
+                {Icon && <Icon className={cn('h-3.5 w-3.5', isActive ? 'opacity-100' : 'opacity-80')} />}
                 <span className="truncate">{option.label}</span>
               </div>
             </button>

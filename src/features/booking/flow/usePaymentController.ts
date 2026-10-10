@@ -7,6 +7,7 @@ import { depositOf, feeLabel } from "../pricing";
 import { useReserveMutation } from "../queries";
 import type { PayMethod } from "../types";
 import { useBookingFlow } from "./BookingContext";
+import { cardMissing, toastMissing } from "./missingData";
 import { brandFromName, digitsOf, firstUsableCard, isCardComplete, isCvcComplete, type CardValues } from "./cardValidation";
 import { NEW_CARD } from "./SavedCardPicker";
 import { useSavedCardManager } from "./useSavedCardManager";
@@ -14,7 +15,7 @@ import { useSavedCardManager } from "./useSavedCardManager";
 /**
  * El cobro de la reserva, sin la pantalla alrededor: la propina, los descuentos,
  * cómo se paga, la tarjeta y el resumen. Lo comparten las tres versiones de la
- * reserva —el paso «Pagar», el cierre de la agenda abierta y la tarjeta de pago
+ * reserva —el paso «Pagar», el cierre de la agenda y la tarjeta de pago
  * dentro de la conversación—, así el dinero se calcula y se cobra igual en todas.
  */
 export function usePaymentController() {
@@ -87,11 +88,13 @@ export function usePaymentController() {
   const pay = () => {
     if (!customer || !state.branchId || !method) return;
     if (usesCard && !chosenSaved && !card) {
+      toastMissing(t, [t("booking.payment.cardMissing")]);
       setSheet({ open: true, prefill: false });
       return;
     }
     if (usesCard && (chosenSaved ? !isCvcComplete(savedCvc, brandFromName(chosenSaved.brand)) : !card || !isCardComplete(card))) {
       setShowCardErrors(true);
+      toastMissing(t, chosenSaved ? [t("booking.payment.cvcMissing")] : card ? cardMissing(t, card) : [t("booking.payment.cardMissing")]);
       return;
     }
     reserve.mutate(

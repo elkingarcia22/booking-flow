@@ -1,5 +1,5 @@
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "./bookingToast";
 import { useAppT } from "@/app/i18n";
 import { Field, Rating } from "@/components/forms";
 import { Button } from "@/components/ui/button";

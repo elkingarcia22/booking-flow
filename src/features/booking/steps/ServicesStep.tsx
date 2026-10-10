@@ -13,6 +13,7 @@ import { useDragScroll } from "@/hooks/useDragScroll";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../flow/BookingContext";
+import { toastMissing } from "../flow/missingData";
 import { PersonPicker } from "../flow/PersonPicker";
 import { StepLayout } from "../flow/StepLayout";
 import { FIRST_VISIT_PROMO } from "../pricing";
@@ -38,6 +39,14 @@ export function ServicesStep() {
   const categories = [...new Set(services.map((service) => service.category).filter(Boolean))];
   const visible = services.filter((service) => (category === ALL || service.category === category) && (query.trim() === "" || plain(`${service.name} ${service.description}`).includes(plain(query.trim()))));
   const minutes = itemDuration(selected, catalog);
+  // Tocó «Siguiente» sin elegir nada: la lista y el pie se marcan hasta que elija uno.
+  const [triedNext, setTriedNext] = React.useState(false);
+  const missingService = triedNext && selected.length === 0;
+  const next = () => {
+    setTriedNext(true);
+    if (toastMissing(t, [selected.length === 0 && t("booking.services.pick")])) return;
+    dispatch({ type: "goTo", step: "barber" });
+  };
 
   return (
     <StepLayout
@@ -56,12 +65,12 @@ export function ServicesStep() {
                 </Text>
               </>
             ) : (
-              <Text size="sm" tone="muted">
+              <Text size="sm" tone={missingService ? "negative" : "muted"} weight={missingService ? "medium" : undefined}>
                 {t("booking.services.pick")}
               </Text>
             )}
           </div>
-          <Button type="button" size="lg" disabled={selected.length === 0} onClick={() => dispatch({ type: "goTo", step: "barber" })}>
+          <Button type="button" size="lg" onClick={next}>
             {t("booking.services.next")}
             <ThemaIcon name="arrowRight" />
           </Button>
@@ -110,7 +119,14 @@ export function ServicesStep() {
       ) : visible.length === 0 ? (
         <EmptyState icon="search" title={t("booking.services.empty")} />
       ) : (
-        <div className={cn("grid grid-cols-1 gap-3", layout === "wide" && "lg:grid-cols-2")}>
+        <div className="flex flex-col gap-3">
+        {missingService && (
+          <Text role="alert" size="sm" tone="negative" weight="medium" className="flex items-center gap-1.5">
+            <ThemaIcon name="error" size="sm" tone="negative" />
+            {t("booking.services.pick")}
+          </Text>
+        )}
+        <div className={cn("grid grid-cols-1 gap-3 rounded-2xl", layout === "wide" && "lg:grid-cols-2", missingService && "outline outline-1 outline-offset-4 outline-destructive")}>
           {visible.map((service) => {
             const isSelected = selected.includes(service.id);
             return (
@@ -153,6 +169,7 @@ export function ServicesStep() {
               </MagicCard>
             );
           })}
+        </div>
         </div>
       )}
     </StepLayout>

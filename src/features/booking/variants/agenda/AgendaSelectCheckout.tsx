@@ -4,6 +4,7 @@ import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
+import { toast } from "../../flow/bookingToast";
 import { type DraftItem } from "../../bookingState";
 import { formatPhone, parseStart } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
@@ -27,6 +28,12 @@ function AppointmentCard({ item }: { item: DraftItem }) {
   const branch = shop.branches.find((entry) => entry.id === state.branchId);
   const forOther = item.person.kind !== "self";
   const [isPersonOpen, setIsPersonOpen] = React.useState(false);
+  const remove = () => {
+    const index = state.items.findIndex((entry) => entry.key === item.key);
+    if (index < 0) return;
+    dispatch({ type: "removeItem", index });
+    toast(t("booking.review.removed"), { action: { label: t("booking.review.undo"), onClick: () => dispatch({ type: "restoreItem", index, item }) } });
+  };
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-surface">
       <div className="flex items-start gap-3 p-3">
@@ -61,6 +68,11 @@ function AppointmentCard({ item }: { item: DraftItem }) {
         <Button type="button" variant="ghost" size="sm" className="-mr-1.5" onClick={() => setIsPersonOpen(true)}>
           {t(forOther ? "booking.person.change" : "booking.person.add")}
         </Button>
+        {state.items.length > 1 && (
+          <Button type="button" variant="ghost" size="sm" className="-mr-1.5" onClick={remove} aria-label={t("booking.review.remove")}>
+            <ThemaIcon name="close" />
+          </Button>
+        )}
       </div>
       <PersonSheet open={isPersonOpen} onOpenChange={setIsPersonOpen} person={item.person} onChoose={(person) => dispatch({ type: "setItemPerson", key: item.key, person })} />
       {state.customer && (
@@ -119,73 +131,106 @@ function NewCustomerDetails() {
   );
 }
 
-function Body({ payment }: { payment: PaymentController | null }) {
+/** «Agregar otra cita»: con el mismo trazo de las demás tarjetas, rayado como lo que falta por llenar. */
+function AddAnotherCard({ onClick }: { onClick: () => void }) {
   const t = useAppT();
-  const { state, layout } = useBookingFlow();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl border border-dashed border-border bg-surface/60 p-3 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <IconTile size="md" icon={<ThemaIcon name="plus" />} />
+      <span className="flex min-w-0 flex-col">
+        <Text as="span" weight="semibold">
+          {t("booking.review.addAnother")}
+        </Text>
+        <Text as="span" size="xs" tone="muted">
+          {t("booking.review.addAnotherHint")}
+        </Text>
+      </span>
+    </button>
+  );
+}
+
+/** El pie de «Confirma tu cita»: seguir al pago, que se abre al identificarse. */
+function ContinueFooter({ onContinue, locked }: { onContinue: () => void; locked: boolean }) {
+  const t = useAppT();
+  return (
+    <Button type="button" size="lg" className="w-full" disabled={locked} onClick={onContinue}>
+      {locked ? <ThemaIcon name="lock" /> : null}
+      {locked ? t("booking.agenda.checkout.continueLocked") : t("booking.agenda.checkout.continue")}
+      {locked ? null : <ThemaIcon name="arrowRight" />}
+    </Button>
+  );
+}
+
+interface ReviewProps {
+  /** Seguir a la pantalla de pago. */
+  onContinue: () => void;
+  /** Volver a la agenda a elegir otra hora, sin soltar las de ahora. */
+  onAddAnother: () => void;
+}
+
+/**
+ * «Confirma tu cita» en la Agenda con selector: solo lo de la cita. Las citas
+ * en sus tarjetas (con a nombre de quién), sumar otra, quién eres si aún no
+ * ingresaste y los productos. El pago es la pantalla siguiente (`AgendaSelectPay`).
+ */
+export function AgendaSelectCheckout({ onContinue, onAddAnother }: ReviewProps) {
+  const t = useAppT();
+  const { state } = useBookingFlow();
+  const isSignedIn = Boolean(state.customer);
+  const { footer, portal } = useAsideFooter(<ContinueFooter onContinue={onContinue} locked={!isSignedIn} />);
   let index = 0;
   const next = () => ++index;
   return (
-    <>
-      <CheckoutSection index={next()} title={t("booking.agenda.checkout.yourAppointment")}>
+    <StepLayout title={t("booking.agenda.checkout.title")} lead={t("booking.agenda.checkout.selectLead")} footer={footer}>
+      <CheckoutSection index={next()} title={t(state.items.length > 1 ? "booking.agenda.checkout.appointments" : "booking.agenda.checkout.yourAppointment")}>
         {state.items.map((item) => (
           <AppointmentCard key={item.key} item={item} />
         ))}
+        <AddAnotherCard onClick={onAddAnother} />
       </CheckoutSection>
-      {!state.customer && (
+      {!isSignedIn && (
         <CheckoutSection index={next()} title={t("booking.agenda.checkout.yourDetails")}>
           {state.token ? <NewCustomerDetails /> : <AgendaIdentity />}
         </CheckoutSection>
       )}
-      {state.customer && (
+      {isSignedIn && (
         <CheckoutSection index={next()} title={t("booking.agenda.checkout.products")}>
           <Extras />
         </CheckoutSection>
       )}
-      <CheckoutSection index={next()} title={t("booking.agenda.checkout.pay")}>
-        {payment ? (
-          <div className="flex flex-col gap-5">
-            <PaymentPanel payment={payment} compact showOrder={layout !== "wide"} />
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border p-3">
-            <IconTile size="md" shape="circle" tone="neutral" icon={<ThemaIcon name="lock" />} />
-            <Text size="sm" tone="muted">
-              {t("booking.agenda.checkout.signInFirst")}
-            </Text>
-          </div>
-        )}
-      </CheckoutSection>
-    </>
+      {portal}
+    </StepLayout>
   );
 }
 
-function IdentifiedCheckout() {
-  const t = useAppT();
-  const payment = usePaymentController();
+function PayBody({ payment }: { payment: PaymentController }) {
+  const { layout } = useBookingFlow();
   const { footer, portal } = useAsideFooter(<CheckoutFooter payment={payment} />);
+  const t = useAppT();
   return (
-    <StepLayout title={t("booking.agenda.checkout.title")} lead={t("booking.agenda.checkout.selectLead")} footer={footer}>
-      <Body payment={payment} />
+    <StepLayout title={t("booking.agenda.pay.title")} lead={t("booking.agenda.pay.lead")} footer={footer}>
+      <PaymentPanel payment={payment} compact showOrder={layout !== "wide"} />
       {portal}
     </StepLayout>
   );
 }
 
 /**
- * Confirmar y pagar en la Agenda con selector: una sola cita, así que va
- * arriba en una tarjeta (con a nombre de quién) y abajo solo las cuentas, sin
- * repetirla. Sin «Volver a la agenda»: la flecha de la cabecera ya lo hace.
- * La tienda es un campo más y el pago va en su versión compacta.
+ * «Pago» en la Agenda con selector: solo cómo se paga (propina, descuentos,
+ * método y tarjeta) y el botón que cobra. Aquí ya se sabe quién es: sin cuenta
+ * se vuelve a «Confirma tu cita».
  */
-export function AgendaSelectCheckout() {
-  const t = useAppT();
+export function AgendaSelectPay() {
   const { state } = useBookingFlow();
-  const { footer, portal } = useAsideFooter(<CheckoutFooter payment={null} />, { asideOnly: true });
-  if (state.customer) return <IdentifiedCheckout key={state.customer.id} />;
-  return (
-    <StepLayout title={t("booking.agenda.checkout.title")} lead={t("booking.agenda.checkout.selectLead")} footer={footer}>
-      <Body payment={null} />
-      {portal}
-    </StepLayout>
-  );
+  if (!state.customer) return null;
+  return <IdentifiedPay key={state.customer.id} />;
+}
+
+function IdentifiedPay() {
+  const payment = usePaymentController();
+  return <PayBody payment={payment} />;
 }

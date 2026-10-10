@@ -15,6 +15,8 @@ interface AgendaBarberFieldProps {
   /** Quienes hacen todo lo elegido, ya ordenados (el de siempre primero). */
   barbers: readonly BookingBarber[];
   usualId: string | null;
+  /** Sin sede no hay barberos (son de cada sede): tocar el campo abre primero la sede. */
+  onNeedBranch?: () => void;
 }
 
 /**
@@ -24,7 +26,7 @@ interface AgendaBarberFieldProps {
  * cobran por eso. «Ver perfil» abre su perfil dentro de la ventana. Lo elegido
  * filtra las horas de abajo; las horas se eligen aparte.
  */
-export function AgendaBarberField({ labelledBy, barbers, usualId, eyebrow }: AgendaBarberFieldProps) {
+export function AgendaBarberField({ labelledBy, barbers, usualId, eyebrow, onNeedBranch }: AgendaBarberFieldProps) {
   const t = useAppT();
   const { state, dispatch, catalog, fmt } = useBookingFlow();
   const [open, setOpen] = React.useState(false);
@@ -57,7 +59,7 @@ export function AgendaBarberField({ labelledBy, barbers, usualId, eyebrow }: Age
         detail={chosen ? [chosen.level, `★ ${chosen.rating.toFixed(1)}`].filter(Boolean).join(" · ") : t("booking.barber.anyLead")}
         placeholder={t("booking.barber.any")}
         open={open}
-        onOpen={() => setOpen(true)}
+        onOpen={() => (!state.branchId && onNeedBranch ? onNeedBranch() : setOpen(true))}
         testId="agenda-barber-field"
       />
       <PickerOverlay

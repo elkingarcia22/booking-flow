@@ -10,6 +10,7 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { useBookingFlow } from "../flow/BookingContext";
+import { toastMissing } from "../flow/missingData";
 import { brandFromName, isCvcComplete, type CardValues } from "../flow/cardValidation";
 import { NewCardSheet } from "../flow/NewCardSheet";
 import { NEW_CARD, SavedCardPicker } from "../flow/SavedCardPicker";
@@ -97,12 +98,13 @@ export function GiftStep() {
 
   const pay = () => {
     setShowErrors(true);
-    if (errors.amount || errors.name || errors.phone) return;
+    if (toastMissing(t, [errors.amount, errors.name, errors.phone])) return;
     if (!chosenSaved && !card) {
+      toastMissing(t, [t("booking.payment.cardMissing")]);
       setSheet({ open: true, prefill: false });
       return;
     }
-    if (chosenSaved && !isCvcComplete(savedCvc, brandFromName(chosenSaved.brand))) return;
+    if (chosenSaved && toastMissing(t, [!isCvcComplete(savedCvc, brandFromName(chosenSaved.brand)) && t("booking.payment.cvcMissing")])) return;
     buy.mutate({
       amount,
       recipientName: name.trim(),

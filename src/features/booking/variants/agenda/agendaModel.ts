@@ -2,7 +2,7 @@ import type { DraftItem } from "../../bookingState";
 import type { BookingBarber, BookingService, Slot } from "../../types";
 
 /**
- * Las cuentas de la agenda abierta, sin interfaz: qué horas tiene cada barbero
+ * Las cuentas de la agenda, sin interfaz: qué horas tiene cada barbero
  * el día que se mira, cómo se reparten en mañana, tarde y noche y cuántos
  * quedan libres a cada hora descontando lo que ya va en el carrito.
  */
@@ -41,16 +41,6 @@ export function ableBarbers(barbers: readonly BookingBarber[], serviceIds: reado
 /** Las citas del carrito que caen ese día a esa hora (la que se está cambiando no cuenta). */
 function cartAt(items: readonly DraftItem[], day: string, time: string, skipIndex: number | null): DraftItem[] {
   return items.filter((item, index) => index !== skipIndex && item.start === `${day}T${time}`);
-}
-
-/**
- * Las horas de un barbero ese día. Una hora que ya apartó en el carrito con él
- * sale como `taken`: se ve marcada y no se puede apartar dos veces.
- */
-export function barberTimes(slots: readonly Slot[], barberId: string, day: string, items: readonly DraftItem[], skipIndex: number | null): { time: string; taken: boolean }[] {
-  return slots
-    .filter((slot) => slot.barberIds.includes(barberId))
-    .map((slot) => ({ time: slot.time, taken: cartAt(items, day, slot.time, skipIndex).some((item) => item.barberId === barberId) }));
 }
 
 export interface TimeOption {

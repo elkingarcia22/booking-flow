@@ -1,7 +1,7 @@
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../../flow/bookingToast";
 import { useAppT } from "@/app/i18n";
-import { Heading, Text } from "@/components/typography";
+import { Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/utility/IconTile";
@@ -12,15 +12,12 @@ import { initialsOf, parseStart } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { BookingSheet } from "../../flow/BookingSheet";
 import { itemPrice } from "../../useBookingTotals";
-import { CheckoutProducts, CheckoutSummary } from "../../flow/CheckoutRecap";
 
 interface CartProps {
   /** Al tocar «Cambiar»: la agenda vuelve a la vista con esa cita abierta. */
   onEdit: () => void;
   /** Ir a confirmar; sin esto (ya en el cierre) no hay botón. */
   onContinue?: () => void;
-  /** El hueco al pie donde el cierre deja su botón de pagar (solo el panel lateral). */
-  actionSlotRef?: (element: HTMLElement | null) => void;
 }
 
 /** Las citas apartadas, una por fila: quién, qué, con quién y cuándo, con cambiar y quitar. */
@@ -114,42 +111,6 @@ function CartTotal({ onContinue }: { onContinue?: () => void }) {
         </Button>
       )}
     </div>
-  );
-}
-
-/** «Tu reserva» en la columna de la derecha (monitor): siempre a la vista mientras se eligen horas. */
-export function AgendaCartAside({ onEdit, onContinue, actionSlotRef }: CartProps) {
-  const t = useAppT();
-  const { state } = useBookingFlow();
-  return (
-    <aside aria-labelledby="agenda-cart" className="flex h-full flex-col gap-4 p-6">
-      <div className="flex flex-col gap-1">
-        <Heading level={5} id="agenda-cart">
-          {t("booking.agenda.cart.title")}
-        </Heading>
-        <Text size="sm" tone="secondary">
-          {state.items.length === 0 ? t("booking.agenda.cart.empty") : t("booking.agenda.cart.another")}
-        </Text>
-      </div>
-      {state.items.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border p-6 text-center">
-          <IconTile size="lg" shape="circle" tone="neutral" icon={<ThemaIcon name="clock" />} />
-          <Text size="sm" tone="muted">
-            {t("booking.agenda.cart.emptyHint")}
-          </Text>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-          <AgendaCartLines onEdit={onEdit} readOnly={!onContinue} />
-          {actionSlotRef && <CheckoutProducts />}
-        </div>
-      )}
-      <div className="flex flex-col gap-4 border-t border-border pt-4">
-        {/* En el cierre, la cuenta completa sustituye al total: se ve todo lo elegido. */}
-        {actionSlotRef ? <CheckoutSummary /> : <CartTotal onContinue={onContinue} />}
-        {actionSlotRef && <div ref={actionSlotRef} />}
-      </div>
-    </aside>
   );
 }
 

@@ -52,6 +52,8 @@ export function Field({
             return React.cloneElement(child as React.ReactElement<any>, {
               id: (child.props as any).id || id,
               disabled: (child.props as any).disabled || disabled,
+              // Con error, el control se pinta en su estado de error (borde y anillo destructivos).
+              "aria-invalid": error ? true : (child.props as any)["aria-invalid"],
               "aria-describedby": cn(
                 (child.props as any)["aria-describedby"],
                 description && descriptionId,

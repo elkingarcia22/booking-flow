@@ -105,7 +105,8 @@ export function PhoneInput({
           "h-10 w-full min-w-0 flex-1 rounded-md border border-input bg-surface px-3.5 text-sm text-text-primary tabular-nums transition-all dark:bg-muted",
           "placeholder:text-text-muted",
           "focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-          "disabled:cursor-not-allowed disabled:opacity-50"
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          "aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20 aria-[invalid=true]:focus-visible:border-destructive aria-[invalid=true]:focus-visible:ring-destructive/30"
         )}
       />
     </div>

@@ -101,7 +101,7 @@ const TabsTrigger = React.forwardRef<
           layoutId={`tabs-bg-${id}`}
           className={cn(
             "absolute inset-0 z-0",
-            variant === "page" ? "rounded-sm bg-primary" : "rounded-md bg-surface shadow-card"
+            variant === "page" ? "rounded-sm bg-primary" : "rounded-md bg-surface shadow-card ring-1 ring-border"
           )}
           initial={false}
           transition={{

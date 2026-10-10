@@ -12,6 +12,7 @@ import type { BookingPerson } from "../bookingState";
 import { initialsOf } from "../bookingFormat";
 import { useBookingFlow } from "./BookingContext";
 import { BookingSheet } from "./BookingSheet";
+import { toastMissing } from "./missingData";
 
 const RELATIONS: readonly AppMessageKey[] = [
   "booking.person.relation.child",
@@ -57,7 +58,7 @@ export function PersonSheet({ open, onOpenChange, person, onChoose }: { open: bo
   };
   const addNew = () => {
     setTouched(true);
-    if (name.trim().length < MIN_NAME) return;
+    if (toastMissing(t, [name.trim().length < MIN_NAME && t("booking.person.nameError")])) return;
     choose({ kind: "new", name: name.trim(), relation });
     setName("");
     setTouched(false);

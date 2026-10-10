@@ -12,6 +12,7 @@ import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { formatPhone } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
+import { toastMissing } from "../../flow/missingData";
 import { useCreateCustomerMutation, useRequestCodeMutation, useVerifyCodeMutation } from "../../queries";
 
 const MIN_DIGITS = 10;
@@ -32,7 +33,7 @@ function PhoneForm() {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    if (!isValid) return;
+    if (toastMissing(t, [!isValid && t("booking.phone.invalid")])) return;
     request.mutate(phone, { onSuccess: (sent) => dispatch({ type: "codeSent", phone, sentTo: sent.sentTo, channel: sent.channel }) });
   };
 
@@ -123,7 +124,7 @@ export function ProfileForm() {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    if (errors.firstName || errors.lastName || errors.email) return;
+    if (toastMissing(t, [errors.firstName, errors.lastName, errors.email])) return;
     // El perfil se guarda sin moverse de la agenda: lo armado sigue en su sitio.
     create.mutate({ firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing }, { onSuccess: (customer) => dispatch({ type: "customerUpdated", customer }) });
   };

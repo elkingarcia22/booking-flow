@@ -1,6 +1,6 @@
 import * as React from "react";
 import { startOfDay } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "./bookingToast";
 import { useAppT } from "@/app/i18n";
 import { Spinner } from "@/components/feedback/Spinner";
 import { DrawerShell } from "@/components/overlays";

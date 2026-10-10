@@ -3,6 +3,7 @@
  * aparición al hacer scroll. Los estilos viven en src/styles/atmosphere.css.
  */
 export { HairCanvas, type HairCanvasProps } from "./HairCanvas";
+export { HairBurst, type HairBurstProps } from "./HairBurst";
 export { BarberPole, type BarberPoleProps } from "./BarberPole";
 export { PoleRing, type PoleRingProps } from "./PoleRing";
 export { CutLine, type CutLineProps } from "./CutLine";

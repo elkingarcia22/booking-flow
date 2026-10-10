@@ -1,36 +1,7 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
 node_modules
 dist
-dist-ssr
 *.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Reference repos (cloned locally, not tracked)
-references/
-dist-lib
-test-results
-playwright-report
-coverage
 .env
 .env.local
-
-# Índice local de CodeGraph (cada quien genera el suyo con `codegraph init`)
-.codegraph/
+.vercel
+.DS_Store

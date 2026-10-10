@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
+import { toastMissing } from "../../flow/missingData";
 import type { BookingService } from "../../types";
 import { fromPrice, itemDuration, itemPrice } from "../../useBookingTotals";
 import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
@@ -26,7 +27,7 @@ const plain = (value: string): string => value.toLowerCase().normalize("NFD").re
  * con 30, y las horas libres quedan a la vista. Se elige dentro y se aplica con
  * «Ver horas»; cerrar sin aplicar no cambia nada.
  */
-export function AgendaServiceField({ labelledBy, eyebrow }: { labelledBy: string; eyebrow?: string }) {
+export function AgendaServiceField({ labelledBy, eyebrow, onNeedBranch }: { labelledBy: string; eyebrow?: string; /** Sin sede no hay carta (es de cada sede): tocar el campo abre primero la sede. */ onNeedBranch?: () => void }) {
   const t = useAppT();
   const { state, dispatch, catalog, catalogLoading, fmt, touch } = useBookingFlow();
   const [open, setOpen] = React.useState(false);
@@ -68,7 +69,7 @@ export function AgendaServiceField({ labelledBy, eyebrow }: { labelledBy: string
         detail={t("booking.agenda.whatSummary", { minutes: itemDuration(selected, catalog), price: fmt.money(itemPrice({ serviceIds: selected, barberId: null }, catalog)) })}
         placeholder={t("booking.agenda.whatPlaceholder")}
         open={open}
-        onOpen={() => setOpen(true)}
+        onOpen={() => (!state.branchId && onNeedBranch ? onNeedBranch() : setOpen(true))}
         testId="agenda-service-field"
       />
       <ServicePickerOverlay open={open} onOpenChange={setOpen} initial={selected} onApply={apply} />
@@ -87,6 +88,14 @@ function ServicePickerOverlay({ open, onOpenChange, initial, onApply }: ServiceP
   const t = useAppT();
   const { catalog, fmt } = useBookingFlow();
   const [picked, setPicked] = React.useState<readonly string[]>(initial);
+  // Tocó «Ver horas» sin elegir: el pie lo dice en rojo hasta que elija uno.
+  const [triedApply, setTriedApply] = React.useState(false);
+  const missingService = triedApply && picked.length === 0;
+  const apply = () => {
+    setTriedApply(true);
+    if (toastMissing(t, [picked.length === 0 && t("booking.services.pick")])) return;
+    onApply(picked);
+  };
   const [query, setQuery] = React.useState("");
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -115,12 +124,12 @@ function ServicePickerOverlay({ open, onOpenChange, initial, onApply }: ServiceP
             </Text>
           </>
         ) : (
-          <Text size="sm" tone="muted">
+          <Text role={missingService ? "alert" : undefined} size="sm" tone={missingService ? "negative" : "muted"} weight={missingService ? "medium" : undefined}>
             {t("booking.services.pick")}
           </Text>
         )}
       </div>
-      <Button type="button" size="lg" disabled={picked.length === 0} onClick={() => onApply(picked)} data-testid="agenda-service-apply">
+      <Button type="button" size="lg" onClick={apply} data-testid="agenda-service-apply">
         {t("booking.agenda.whatApply")}
       </Button>
     </div>

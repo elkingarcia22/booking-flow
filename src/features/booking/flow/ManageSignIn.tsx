@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { describeError } from "@/lib/api";
 import { bookingApi } from "../api";
 import { useBookingFlow } from "./BookingContext";
+import { toastMissing } from "./missingData";
 
 const CODE_LENGTH = 6;
 const MIN_PHONE_DIGITS = 12;
@@ -21,6 +22,8 @@ export function ManageSignIn() {
   const { state, dispatch } = useBookingFlow();
   const [notFound, setNotFound] = React.useState(false);
   const [phone, setPhone] = React.useState(state.phone);
+  const [touched, setTouched] = React.useState(false);
+  const phoneMissing = phone.replace(/\D/g, "").length < MIN_PHONE_DIGITS;
   const [code, setCode] = React.useState("");
   const request = useMutation({ mutationFn: () => bookingApi.requestOtp(phone) });
   const verify = useMutation({ mutationFn: (value: string) => bookingApi.verifyOtp(phone, value) });
@@ -45,13 +48,15 @@ export function ManageSignIn() {
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
+          setTouched(true);
+          if (toastMissing(t, [phoneMissing && t("booking.phone.invalid")])) return;
           request.mutate();
         }}
       >
-        <Field label={t("booking.phone.label")} error={request.isError ? describeError(request.error).description : undefined}>
+        <Field label={t("booking.phone.label")} error={touched && phoneMissing ? t("booking.phone.invalid") : request.isError ? describeError(request.error).description : undefined}>
           <PhoneInput value={phone} onValueChange={setPhone} defaultCountry="CO" />
         </Field>
-        <Button type="submit" size="lg" disabled={phone.replace(/\D/g, "").length < MIN_PHONE_DIGITS || request.isPending}>
+        <Button type="submit" size="lg" disabled={request.isPending}>
           {request.isPending && <Spinner size="sm" tone="inverse" />}
           {t("booking.manage.sendCode")}
         </Button>

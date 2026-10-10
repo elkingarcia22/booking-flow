@@ -14,7 +14,6 @@ import { useBookingFlow } from "../flow/BookingContext";
 import { StepLayout } from "../flow/StepLayout";
 import { WaitlistCard } from "../flow/WaitlistCard";
 import { useAvailabilityQuery } from "../queries";
-import type { WaitlistJoined } from "../types";
 import { itemDuration } from "../useBookingTotals";
 
 /** Cuántos días hacia delante se puede reservar. */
@@ -33,8 +32,6 @@ const clockOf = (date: Date): string => `${String(date.getHours()).padStart(2, "
 export function TimeStep() {
   const t = useAppT();
   const { state, dispatch, shop, catalog, touch, fmt } = useBookingFlow();
-  // Dónde ya se apuntó en la lista de espera, por día y barbero: sobrevive a cambiar de día y volver.
-  const [waitlist, setWaitlist] = React.useState<Readonly<Record<string, WaitlistJoined>>>({});
   const draft = state.draft;
   const branch = shop.branches.find((item) => item.id === state.branchId);
   const todayOver = branch ? isTodayOver(branch.closesAt, shop.minNoticeMinutes) : false;
@@ -45,8 +42,6 @@ export function TimeStep() {
   const barber = catalog?.barbers.find((item) => item.id === draft?.barberId);
   const minutes = itemDuration(draft?.serviceIds ?? [], catalog);
   const services = (draft?.serviceIds ?? []).map((id) => catalog?.services.find((service) => service.id === id)?.name).filter(Boolean);
-
-  const waitlistKey = `${dayKeyOf(day)}|${draft?.barberId ?? "any"}`;
 
   if (!draft || !branch) return null;
 
@@ -107,13 +102,7 @@ export function TimeStep() {
 
       {/* Siempre: aunque haya horas, puede que ninguna le sirva. */}
       {!isWaiting && (
-        <WaitlistCard
-          key={waitlistKey}
-          day={day}
-          hasSlots={free.size > 0}
-          joined={waitlist[waitlistKey] ?? null}
-          onJoinedChange={(joined) => setWaitlist((current) => (joined ? { ...current, [waitlistKey]: joined } : Object.fromEntries(Object.entries(current).filter(([key]) => key !== waitlistKey))))}
-        />
+        <WaitlistCard key={`${dayKeyOf(day)}|${draft.barberId ?? "any"}`} day={day} hasSlots={free.size > 0} />
       )}
 
       {/* Al final de todo: si aquí no hay horario o algo falla, se agenda por teléfono. */}

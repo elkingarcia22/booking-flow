@@ -13,6 +13,7 @@ import { BookingSheet } from "./BookingSheet";
 import { useBookingFlow } from "./BookingContext";
 import { CardBrandTile } from "./CardBrandMark";
 import { brandFromName, expiryOk, groupExpiry, savedCardExpiry } from "./cardValidation";
+import { toastMissing } from "./missingData";
 
 const MIN_HOLDER = 3;
 
@@ -62,6 +63,7 @@ export function EditSavedCardSheet({ card, open, onClose, onDone }: SavedCardShe
     if (!card) return;
     if (holderError || expiryError) {
       setShowErrors(true);
+      toastMissing(t, [holderError && t("booking.payment.cardError"), expiryError && t("booking.payment.cardExpiryError")]);
       return;
     }
     const [month, year] = expiry.split("/").map(Number);

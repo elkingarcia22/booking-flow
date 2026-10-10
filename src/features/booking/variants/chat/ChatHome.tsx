@@ -52,16 +52,13 @@ function useHome({ onStart, onVoice }: HomeProps) {
   return { t, ideas, composer, skip };
 }
 
-/** El nombre del asistente con su orbe en pequeño y el degradado de IA. */
+/** El nombre del asistente con el degradado de IA; va bajo su orbe grande, así que no repite el orbe. */
 function ClipperName({ className }: { className?: string }) {
   const t = useAppT();
   return (
-    <span className={cn("flex items-center gap-1.5", className)}>
-      <ClipperOrb size={16} bare />
-      <Text as="span" size="sm" weight="semibold" className="text-ai-gradient tracking-wide">
-        {t("agent.name")}
-      </Text>
-    </span>
+    <Text as="span" size="sm" weight="semibold" className={cn("text-ai-gradient tracking-wide", className)}>
+      {t("agent.name")}
+    </Text>
   );
 }
 

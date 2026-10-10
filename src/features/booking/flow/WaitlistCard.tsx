@@ -1,7 +1,6 @@
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "./bookingToast";
 import { useAppT } from "@/app/i18n";
-import type { AppMessageKey } from "@/app/i18n/types";
 import { SegmentedControl } from "@/components/selection";
 import { Heading, Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
@@ -9,24 +8,16 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { clockMinutes, dayKeyOf } from "../bookingFormat";
 import { useJoinWaitlistMutation, useLeaveWaitlistMutation } from "../queries";
-import type { WaitlistJoined, WaitlistWindow } from "../types";
+import type { WaitlistWindow } from "../types";
 import { useBookingFlow } from "./BookingContext";
+import { WINDOW_KEYS } from "./waitlist";
 
 /** Desde esta hora es noche (la misma frontera que el selector de horas). */
 const EVENING_FROM_MINUTES = 18 * 60;
 
-const WINDOW_KEYS: Record<WaitlistWindow, AppMessageKey> = {
-  morning: "booking.waitlist.morning",
-  afternoon: "booking.waitlist.afternoon",
-  evening: "booking.waitlist.evening",
-  any: "booking.waitlist.any",
-};
 
 interface WaitlistCardProps {
   day: Date;
-  /** Dónde ya se apuntó, por día: vive en el paso para no perderlo al cambiar de día y volver. */
-  joined: WaitlistJoined | null;
-  onJoinedChange: (joined: WaitlistJoined | null) => void;
   /**
    * El día sí tiene horas: la lista de espera queda como una línea discreta bajo
    * ellas («¿Ninguna te sirve?») y se abre al tocarla, para no competir con las horas.
@@ -38,10 +29,12 @@ interface WaitlistCardProps {
  * La lista de espera: siempre a mano, haya horas o no —puede que ninguna de las
  * libres le sirva—. Se apunta con la franja que le sirve. La entrada cae en la misma lista
  * de espera que ve la barbería en el Calendario, que le escribe si alguien cancela.
+ * Lo apuntado vive en la reserva (`state.waitlist`): sobrevive a cambiar de día y
+ * volver, y sin hora apartada apuntarse lleva directo a su confirmación (`WaitlistedStep`).
  */
-export function WaitlistCard({ day, joined, onJoinedChange, hasSlots = false }: WaitlistCardProps) {
+export function WaitlistCard({ day, hasSlots = false }: WaitlistCardProps) {
   const t = useAppT();
-  const { state, shop, catalog, fmt } = useBookingFlow();
+  const { state, dispatch, shop, catalog, fmt } = useBookingFlow();
   const [window, setWindow] = React.useState<WaitlistWindow>("any");
   const [isOpen, setIsOpen] = React.useState(false);
   const join = useJoinWaitlistMutation(state.token);
@@ -50,6 +43,9 @@ export function WaitlistCard({ day, joined, onJoinedChange, hasSlots = false }: 
   const customer = state.customer;
   const barber = catalog?.barbers.find((item) => item.id === draft?.barberId);
   if (!draft || !customer || !state.branchId) return null;
+  const branchId = state.branchId;
+  const dayKey = dayKeyOf(day);
+  const joined = state.waitlist.find((entry) => entry.branchId === branchId && entry.date === dayKey && entry.barberId === draft.barberId) ?? null;
   const dayLabel = fmt.dayLong(day);
   // «Noche» solo si la sede trabaja de noche.
   const branch = shop.branches.find((item) => item.id === state.branchId);
@@ -76,7 +72,7 @@ export function WaitlistCard({ day, joined, onJoinedChange, hasSlots = false }: 
             onClick={() =>
               leave.mutate(
                 joined.id,
-                { onSuccess: () => (onJoinedChange(null), toast(t("booking.waitlist.left"))), onError: () => toast.error(t("booking.waitlist.error")) }
+                { onSuccess: () => (dispatch({ type: "waitlistLeft", id: joined.id }), toast(t("booking.waitlist.left"))), onError: () => toast.error(t("booking.waitlist.error")) }
               )
             }
           >
@@ -140,8 +136,11 @@ export function WaitlistCard({ day, joined, onJoinedChange, hasSlots = false }: 
         disabled={join.isPending}
         onClick={() =>
           join.mutate(
-            { branchId: state.branchId as string, date: dayKeyOf(day), serviceIds: draft.serviceIds, barberId: draft.barberId, window },
-            { onSuccess: onJoinedChange, onError: () => toast.error(t("booking.waitlist.error")) }
+            { branchId, date: dayKey, serviceIds: draft.serviceIds, barberId: draft.barberId, window },
+            {
+              onSuccess: (entry) => dispatch({ type: "waitlistJoined", entry: { ...entry, branchId, serviceIds: [...draft.serviceIds], barberId: draft.barberId } }),
+              onError: () => toast.error(t("booking.waitlist.error")),
+            }
           )
         }
       >

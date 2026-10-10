@@ -10,6 +10,7 @@ import { Spinner } from "@/components/feedback/Spinner";
 import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { useBookingFlow } from "../flow/BookingContext";
+import { toastMissing } from "../flow/missingData";
 import { StepLayout } from "../flow/StepLayout";
 import { defaultBranchId } from "../bookingState";
 import { useCreateCustomerMutation } from "../queries";
@@ -31,13 +32,12 @@ export function ProfileStep() {
     lastName: values.lastName.trim().length < MIN_NAME ? t("booking.profile.lastNameError") : serverFields?.lastName?.[0],
     email: !EMAIL.test(values.email.trim()) ? t("booking.profile.emailError") : serverFields?.email?.[0],
   };
-  const isValid = !errors.firstName && !errors.lastName && !errors.email;
   const set = (key: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement>) => setValues((current) => ({ ...current, [key]: event.target.value }));
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    if (!isValid) return;
+    if (toastMissing(t, [errors.firstName, errors.lastName, errors.email])) return;
     create.mutate(
       { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing },
       { onSuccess: (customer) => dispatch({ type: "profileSaved", customer, onlyBranchId: defaultBranchId(customer, shop.branches.map((item) => item.id)) }) }

@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Grain, Halo } from "@/components/atmosphere";
 import { Heading, Text } from "@/components/typography";
@@ -7,23 +7,29 @@ import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
-import { BookingFlow } from "../BookingFlow";
 import { ShopBrand } from "../flow/ShopBrand";
 import { initialsOf, useBookingFormat } from "../bookingFormat";
-import type { BookingVersion } from "../versions";
 import { useBookingCatalogQuery, useBookingShopQuery } from "../queries";
 
 const FEATURED_SERVICES = 4;
 const FEATURED_BARBERS = 6;
+
+interface DemoSiteProps {
+  /** Si el panel del widget está abierto. Lo lleva la vista previa: al entrar a esta vista se abre. */
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  /** Lo que va en el panel: la reserva, que la vista previa comparte con los demás marcos. */
+  children: React.ReactNode;
+}
 
 /**
  * Un sitio de barbería de ejemplo con el widget puesto: el botón flotante
  * abajo a la derecha abre la reserva en un panel sin salir de la página. Es
  * lo que la barbería pega en su web con el script de «Enlaces y widgets».
  */
-export function DemoSite({ version = "guided" }: { version?: BookingVersion }) {
+export function DemoSite({ isOpen, onOpenChange, children }: DemoSiteProps) {
   const t = useAppT();
-  const [isOpen, setIsOpen] = React.useState(false);
+  const setIsOpen = onOpenChange;
   const { data: shop } = useBookingShopQuery();
   const { data: catalog } = useBookingCatalogQuery(shop?.branches[0]?.id ?? null);
   const fmt = useBookingFormat(shop?.currency);
@@ -114,17 +120,7 @@ export function DemoSite({ version = "guided" }: { version?: BookingVersion }) {
           isOpen ? "pointer-events-auto scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
         )}
       >
-        <BookingFlow
-          key={version}
-          version={version}
-          layout="compact"
-          onFinish={() => setIsOpen(false)}
-          headerTrailing={
-            <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsOpen(false)} aria-label={t("booking.site.close")}>
-              <ThemaIcon name="close" />
-            </Button>
-          }
-        />
+        {children}
       </div>
 
       <Button
@@ -132,7 +128,7 @@ export function DemoSite({ version = "guided" }: { version?: BookingVersion }) {
         size="lg"
         // Abierto, el botón principal es el de la reserva (pagar, continuar): cerrar pasa a secundario.
         variant={isOpen ? "secondary" : "default"}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         className="absolute bottom-6 right-4 z-overlay shadow-xl"
       >

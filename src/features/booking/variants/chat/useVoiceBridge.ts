@@ -3,7 +3,7 @@ import type { ChatReply } from "@/lib/chat";
 import { useAppT } from "@/app/i18n";
 import { useLocale } from "@/i18n";
 import type { ChatEngine } from "./useChatBooking";
-import { fromVoice, matchSpokenOption, voiceReplyFromTurns } from "./voiceReply";
+import { fromVoice, matchSpokenOption, saysOnlyOption, voiceReplyFromTurns } from "./voiceReply";
 
 /** Cuánto tiene que quedarse quieta la conversación (sin «escribiendo» ni mensajes nuevos) para dar la respuesta por dicha. */
 const SETTLE_MS = 700;
@@ -68,7 +68,8 @@ export function useVoiceBridge(
       waiter.current = null;
       window.clearTimeout(current.settle);
       window.clearTimeout(current.deadline);
-      const hellos = greeted.current ? [t("booking.chat.hello", { shop: latest.current.shopName }), t("booking.chat.helloWithIntent", { shop: latest.current.shopName })] : [];
+      const shop = latest.current.shopName;
+      const hellos = greeted.current ? [t("booking.chat.hello", { shop }), t("booking.chat.helloWithIntent", { shop }), t("booking.chat.helloLast", { shop })] : [];
       const fresh = latest.current.engine.turns.slice(current.from).filter((turn) => !hellos.includes(turn.text ?? ""));
       const reply = voiceReplyFromTurns(fresh, locale, { oneOf: (list) => t("booking.chat.voiceOneOf", { list }), someOf: (list) => t("booking.chat.voiceSomeOf", { list }) });
       // Solo valen las opciones que acaba de leer: si pidió un dato (el celular, el correo), no hay lista.
@@ -108,13 +109,27 @@ export function useVoiceBridge(
     [finish]
   );
 
+  /**
+   * La opción que eligió, solo si eso es todo lo que dijo («corte clásico», «la segunda», «con Emilio»).
+   * «Corte clásico con Andrés mañana a las 3» no es elegir «Corte clásico»: va entera, con todo.
+   */
+  const pickOption = React.useCallback(
+    (text: string, options: readonly string[]): string | null => {
+      const option = matchSpokenOption(text, options, locale);
+      if (!option) return null;
+      const byPlace = /^\d+$/.test(fromVoice(text, locale).trim());
+      return byPlace || saysOnlyOption(text, option, locale) ? option : null;
+    },
+    [locale]
+  );
+
   const ask = React.useCallback(
     (text: string): Promise<ChatReply> => {
       const { started: isStarted, start: begin } = latest.current;
       // Respuesta al saludo: agendar, ver sus citas, regalar o un paquete; lo demás es una petición.
       const choices = menu.current;
       menu.current = null;
-      const label = choices ? matchSpokenOption(text, Object.keys(choices), locale) : null;
+      const label = choices ? pickOption(text, Object.keys(choices)) : null;
       const choice = label && choices ? choices[label] : null;
       if (choice === "gift" || choice === "packages") {
         latest.current.openSide(choice);
@@ -122,10 +137,10 @@ export function useVoiceBridge(
       }
       if (choice === "book") return converse(() => begin());
       if (choice === "manage") return converse(() => begin(t("booking.chat.ideaManagePrompt")));
-      const said = matchSpokenOption(text, lastOptions.current, locale) ?? fromVoice(text, locale);
+      const said = pickOption(text, lastOptions.current) ?? fromVoice(text, locale);
       return converse((current) => (isStarted ? current.send(said) : begin(said)));
     },
-    [converse, locale, t]
+    [converse, locale, t, pickOption]
   );
 
   /**

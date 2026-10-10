@@ -5,6 +5,7 @@ import { ThemaIcon } from "@/icons";
 import { BookingSheet } from "./BookingSheet";
 import { CardForm } from "./CardForm";
 import { isCardComplete, type CardValues } from "./cardValidation";
+import { cardMissing, toastMissing } from "./missingData";
 
 const EMPTY_CARD: CardValues = { number: "", expiry: "", cvc: "", name: "" };
 
@@ -33,6 +34,7 @@ export function NewCardSheet({ open, onOpenChange, initial, initialSave, canSave
   const confirm = () => {
     if (!isCardComplete(values)) {
       setShowErrors(true);
+      toastMissing(t, cardMissing(t, values));
       return;
     }
     onConfirm(values, save);

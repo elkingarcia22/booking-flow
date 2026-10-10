@@ -42,11 +42,28 @@ const plain = (value: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** Palabras que no distinguen un servicio de otro («Corte clásico» es, para el cliente, «corte»). */
-const STOPWORDS = new Set(["de", "del", "la", "el", "los", "las", "y", "con", "para", "a", "al", "un", "una", "clasico", "clasica", "+"]);
+/**
+ * Palabras que no distinguen un servicio de otro («Corte clásico» es, para el cliente, «corte»). El
+ * cabello o el pelo tampoco: «corte de cabello» es un corte, no el «Tinte de cabello».
+ */
+const STOPWORDS = new Set(["de", "del", "la", "el", "los", "las", "y", "con", "para", "a", "al", "un", "una", "clasico", "clasica", "+", "cabello", "pelo"]);
 
 /** Otras formas de nombrar lo mismo. */
 const SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+  // Cómo lo dice la gente: «cortarme el pelo», «motilarme», «pintarme el cabello».
+  cortar: ["corte"],
+  cortarme: ["corte"],
+  cortarse: ["corte"],
+  motilar: ["corte"],
+  motilarme: ["corte"],
+  motilada: ["corte"],
+  peluquear: ["corte"],
+  peluquearme: ["corte"],
+  pintar: ["tinte"],
+  pintarme: ["tinte"],
+  tenir: ["tinte"],
+  tenirme: ["tinte"],
+  afeitarme: ["afeitado"],
   afeitar: ["afeitado"],
   afeitada: ["afeitado"],
   rasurar: ["afeitado"],
@@ -72,6 +89,40 @@ const stem = (word: string): string => (word.length > 4 && word.endsWith("s") &&
 
 const tokensOf = (value: string): string[] => plain(value).split(" ").filter(Boolean).map(stem);
 
+/** Desde cuántas letras una palabra se reconoce aunque tenga un error («cortee», «barva»). */
+const FUZZY_MIN_LENGTH = 5;
+
+/** ¿Difieren en una sola letra (de más, de menos o cambiada)? */
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (b.length > a.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** La palabra de la frase que corresponde a `token` del servicio: igual, o con un error si es larga. */
+function wordFor(token: string, pool: ReadonlySet<string>): string | undefined {
+  if (pool.has(token)) return token;
+  if (token.length < FUZZY_MIN_LENGTH) return undefined;
+  return [...pool].find((word) => word.length >= FUZZY_MIN_LENGTH && oneEditApart(word, token));
+}
+
 function matchServices(words: readonly string[], services: ParseContext["services"]): string[] {
   const pool = new Set(words.flatMap((word) => [word, ...(SYNONYMS[word] ?? [])]));
   const indexed = services.map((service) => ({ service, tokens: tokensOf(service.name).filter((token) => !STOPWORDS.has(token)) }));
@@ -81,7 +132,7 @@ function matchServices(words: readonly string[], services: ParseContext["service
     const scored = indexed
       .filter(({ service }) => !picked.includes(service.id))
       .map(({ service, tokens }) => {
-        const hits = tokens.filter((token) => pool.has(token));
+        const hits = tokens.map((token) => wordFor(token, pool)).filter((word): word is string => word !== undefined);
         return { service, hits, ratio: tokens.length > 0 ? hits.length / tokens.length : 0 };
       })
       .filter((entry) => entry.hits.length > 0)
@@ -224,7 +275,14 @@ export function phoneFromText(input: string): string | null {
 }
 
 /** Un código de seis cifras escrito en el chat. */
+const CODE_DIGITS = 6;
+
 export function codeFromText(input: string): string | null {
+  // En cualquier formato: «246810», «246 810», «24 68 10», «2-4-6-8-1-0».
+  const digits = input.replace(/\D/g, "");
+  if (digits.length === CODE_DIGITS) return digits;
   const match = /\b(\d{3})\s?(\d{3})\b/.exec(input);
   return match ? `${match[1]}${match[2]}` : null;
 }
+
+export { numberWordsToDigits } from "./spokenNumbers";

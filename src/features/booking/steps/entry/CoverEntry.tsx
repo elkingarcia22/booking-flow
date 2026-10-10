@@ -17,16 +17,21 @@ import { usePhoneEntry } from "./usePhoneEntry";
  */
 export function CoverEntry() {
   const t = useAppT();
-  const { shop, fmt, layout } = useBookingFlow();
+  const { shop, fmt, layout, touch } = useBookingFlow();
   const entry = usePhoneEntry();
   const cover = shop.coverUrl ?? shop.branches.find((branch) => branch.imageUrl)?.imageUrl ?? null;
   const isWide = layout === "wide";
 
   return (
     <form onSubmit={entry.submit} noValidate className="relative flex flex-1 flex-col">
-      <div className={cn("relative shrink-0 overflow-hidden bg-surface-subtle", isWide ? "h-64" : "h-44")} aria-hidden>
-        {cover && <img src={cover} alt="" className="size-full object-cover motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700" />}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+      {/* La foto crece con la pantalla (en una franja baja y ancha solo se veía la capa), se encuadra arriba,
+          donde está la cara, y se desvanece por máscara: un degradado del color del fondo dejaba una línea
+          donde el halo aclara el fondo de debajo. */}
+      <div
+        className={cn("relative shrink-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]", isWide ? "h-80" : touch === "lg" ? "h-60" : "h-44")}
+        aria-hidden
+      >
+        {cover && <img src={cover} alt="" className={cn("size-full object-cover object-[50%_15%] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700")} />}
       </div>
       {/* Clipper arriba a la derecha, sobre la foto: a la vista sin competir con «Continuar». */}
       <div className="absolute right-4 top-4 z-raised">

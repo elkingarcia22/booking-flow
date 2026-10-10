@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Ticket, CreditCard } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "./bookingToast";
 import { useAppT } from "@/app/i18n";
 import { Spinner } from "@/components/feedback/Spinner";
 import { OptionTile } from "@/components/selection";

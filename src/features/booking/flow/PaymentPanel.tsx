@@ -66,12 +66,13 @@ interface PaymentPanelProps {
  */
 export function PaymentPanel({ payment, showOrder = true, compact = false }: PaymentPanelProps) {
   const t = useAppT();
-  const { state, dispatch, shop, catalog, totals, fmt } = useBookingFlow();
+  const { state, dispatch, shop, catalog, totals, fmt, isPhone } = useBookingFlow();
   const { methods, method, deposit, depositPercent, usesCard, coveredByGift, reserve, serverCardError } = payment;
   const hasSeveralAppointments = state.items.length > 1;
   const customer = state.customer;
   const [isPromoOpen, setIsPromoOpen] = React.useState(false);
   const chosenMethod = methods.find((option) => option.value === method);
+  const methodCards = compact && !isPhone;
 
   const tipOptions: SelectionOption[] = [
     { value: NO_TIP, label: t("booking.payment.tipNone") },
@@ -140,12 +141,14 @@ export function PaymentPanel({ payment, showOrder = true, compact = false }: Pay
       )}
       <section className={coveredByGift ? "hidden" : "flex flex-col gap-3"}>
         <SubHeading compact={compact}>{t("booking.payment.method")}</SubHeading>
-        <div role="radiogroup" aria-label={t("booking.payment.method")} className="flex flex-col gap-2">
+        {/* Compacto (Agenda con selector): las formas de pago como tarjetas lado a lado; en el celular, en filas. */}
+        <div role="radiogroup" aria-label={t("booking.payment.method")} className={methodCards ? cn("grid gap-2", methods.length === 3 ? "grid-cols-3" : "grid-cols-2") : "flex flex-col gap-2"}>
           {methods.map((option) => (
             <OptionTile
               key={option.value}
               option={option}
               compact={compact}
+              layout={methodCards ? "stacked" : "row"}
               selected={method === option.value}
               onSelect={(value) => {
                 dispatch({ type: "setMethod", method: value as PayMethod });

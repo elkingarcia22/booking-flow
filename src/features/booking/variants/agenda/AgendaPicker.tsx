@@ -48,7 +48,8 @@ export function PickerField({ labelledBy, imageUrl, icon, round = false, value, 
     <ThemaIcon name="chevronDown" size="sm" tone="muted" className="shrink-0 transition-transform duration-fast group-aria-expanded:rotate-180" />
   );
   const base = cn(
-    "group w-full rounded-xl border border-input bg-background text-left shadow-xs outline-none transition-[border-color,box-shadow] duration-fast",
+    // Fondo de tarjeta, no de página: en claro el campo se despegaba del fondo solo por un filo.
+    "group w-full rounded-xl border border-input bg-surface text-left shadow-xs outline-none transition-[border-color,box-shadow] duration-fast",
     "hover:border-primary/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
   );
 

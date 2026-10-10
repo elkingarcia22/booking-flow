@@ -1,19 +1,14 @@
 import * as React from "react";
 import { useAppT } from "@/app/i18n";
-import { Heading, Text } from "@/components/typography";
+import { Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { initialsOf } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
 import type { BookingBarber } from "../../types";
-import { itemPrice } from "../../useBookingTotals";
 import type { DayWindow, TimeOption } from "./agendaModel";
 
-/** Cuántas horas se ven de entrada por barbero; el resto, tras «+N». */
-const VISIBLE_TIMES = { compact: 8, wide: 12 } as const;
 const AVATAR_STACK = 3;
 
 const WINDOW_LABEL = { morning: "booking.waitlist.morning", afternoon: "booking.waitlist.afternoon", evening: "booking.waitlist.evening" } as const;
@@ -43,93 +38,6 @@ function TimePill({ label, taken, onPick, ariaLabel, children }: { label: string
   );
 }
 
-interface BarberLaneProps {
-  barber: BookingBarber;
-  times: readonly { time: string; taken: boolean }[];
-  isUsual: boolean;
-  timeLabel: (time: string) => string;
-  onPick: (time: string) => void;
-  onProfile: () => void;
-}
-
-/**
- * Un barbero y sus horas libres del día, en una sola tarjeta: quién es, cuánto
- * cobra por lo elegido y, debajo, las horas a un toque. Quien no tiene horas
- * ese día se queda en la lista, apagado, para que se sepa que existe.
- */
-export function BarberLane({ barber, times, isUsual, timeLabel, onPick, onProfile }: BarberLaneProps) {
-  const t = useAppT();
-  const { state, catalog, fmt, layout } = useBookingFlow();
-  const [expanded, setExpanded] = React.useState(false);
-  const limit = VISIBLE_TIMES[layout];
-  const shown = expanded ? times : times.slice(0, limit);
-  const hidden = times.length - shown.length;
-  const serviceIds = state.draft?.serviceIds ?? [];
-
-  return (
-    <article aria-label={barber.name} className={cn("flex flex-col gap-3 rounded-2xl border bg-surface p-4 shadow-sm", isUsual ? "border-primary/50" : "border-border", times.length === 0 && "opacity-70")}>
-      <header className="flex items-center gap-3">
-        <Avatar size="lg">
-          {barber.avatarUrl && <AvatarImage src={barber.avatarUrl} alt="" />}
-          <AvatarFallback>{initialsOf(barber.name)}</AvatarFallback>
-        </Avatar>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <Heading level={6} className="truncate">
-              {barber.name}
-            </Heading>
-            {isUsual && <Badge variant="secondary">{t("booking.agenda.yourBarber")}</Badge>}
-          </div>
-          <Text size="xs" tone="secondary" className="flex flex-wrap items-center gap-x-1">
-            <span className="text-warning" aria-hidden>
-              ★
-            </span>
-            <span className="tabular-nums">{barber.rating.toFixed(1)}</span>
-            <span aria-hidden>·</span>
-            <span className="font-medium text-text-primary tabular-nums">{fmt.money(itemPrice({ serviceIds, barberId: barber.id }, catalog))}</span>
-            {barber.level && (
-              <>
-                <span aria-hidden>·</span>
-                <span className="truncate">{barber.level}</span>
-              </>
-            )}
-          </Text>
-        </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onProfile} aria-label={`${t("booking.barber.profile")}: ${barber.name}`}>
-          {t("booking.barber.profile")}
-        </Button>
-      </header>
-      {times.length === 0 ? (
-        <Text size="sm" tone="muted">
-          {t("booking.agenda.noSlotsBarber")}
-        </Text>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {shown.map((slot) => (
-            <TimePill
-              key={slot.time}
-              label={timeLabel(slot.time)}
-              taken={slot.taken}
-              onPick={() => onPick(slot.time)}
-              ariaLabel={t("booking.agenda.pickWith", { time: timeLabel(slot.time), name: barber.name })}
-            />
-          ))}
-          {hidden > 0 && (
-            <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setExpanded(true)}>
-              {t("booking.agenda.moreTimes", { count: hidden })}
-            </Button>
-          )}
-          {expanded && times.length > limit && (
-            <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setExpanded(false)}>
-              {t("booking.agenda.lessTimes")}
-            </Button>
-          )}
-        </div>
-      )}
-    </article>
-  );
-}
-
 interface TimeWindowsProps {
   groups: readonly { window: DayWindow; options: TimeOption[] }[];
   timeLabel: (time: string) => string;
@@ -138,19 +46,20 @@ interface TimeWindowsProps {
   /** La hora ya elegida (una sola cita): se queda a la vista, marcada, en vez de desaparecer. */
   selectedTime?: string | null;
   onPick: (time: string) => void;
+  className?: string;
 }
 
 /**
  * Las horas del día sin pensar en quién: por franja, cada hora con las caras de
  * quienes pueden; en el celular, sin barbero elegido, el icono de «Sin preferencia». Tocar una es reservar «con quien esté libre».
  */
-export function TimeWindows({ groups, timeLabel, withName, selectedTime = null, onPick }: TimeWindowsProps) {
+export function TimeWindows({ groups, timeLabel, withName, selectedTime = null, onPick, className }: TimeWindowsProps) {
   const t = useAppT();
   const { catalog, isPhone } = useBookingFlow();
   const faces = (ids: readonly string[]) => ids.map((id) => catalog?.barbers.find((barber) => barber.id === id)).filter((barber): barber is BookingBarber => barber !== undefined);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={cn("flex flex-col gap-5", className)}>
       {groups.map((group) => (
         <section key={group.window} aria-label={t(WINDOW_LABEL[group.window])} className="flex flex-col gap-2.5">
           <Text size="xs" weight="semibold" tone="muted" className="uppercase tracking-wide">

@@ -218,10 +218,13 @@ function neutralScale(preset: ThemePreset, mode: ResolvedMode) {
       border: at(sat(42, 3), 85),
       borderStrong: at(sat(36, 4), 66),
       // Tinta espresso en vez de gris: el texto lleva el matiz del oro, como
-      // la impresión en sepia de una carta de restaurante.
+      // la impresión en sepia de una carta de restaurante. El tenue (etiquetas,
+      // ayudas, placeholders) da 4,5:1 sobre el fondo más oscuro donde vive (la
+      // pista de pestañas): a 54 % daba 2,8:1 y casi no se leía. El secundario
+      // baja con él para que sigan siendo tres niveles.
       textPrimary: at(sat(60, 10), 14),
-      textSecondary: at(sat(40, 6), 36),
-      textMuted: at(sat(29, 4), 54),
+      textSecondary: at(sat(40, 6), 29),
+      textMuted: at(sat(29, 4), 40),
     };
   }
   if (mode === "light") {
@@ -234,9 +237,11 @@ function neutralScale(preset: ThemePreset, mode: ResolvedMode) {
       accent: at(sat(28, 10), 90),
       border: at(sat(4, 3), 82),
       borderStrong: at(sat(6, 4), 62),
+      // El tenue da 4,5:1 sobre la pista de pestañas (a 62 % daba 2,4:1); el
+      // secundario baja con él para que principal, secundario y tenue se distingan.
       textPrimary: at(sat(19, 10), 23),
-      textSecondary: at(sat(10, 6), 40),
-      textMuted: at(sat(6, 4), 62),
+      textSecondary: at(sat(10, 6), 33),
+      textMuted: at(sat(6, 4), 43),
     };
   }
   // En oscuro la saturación base la fija el preset (45 para el navy Thema,

@@ -13,6 +13,11 @@ export interface OptionTileProps {
   onSelect?: (value: string) => void
   /** Whether to use a more compact layout */
   compact?: boolean
+  /**
+   * `row` (default): icono, texto y radio en una fila. `stacked`: icono arriba, el nombre
+   * debajo (hasta dos líneas) y el radio en la esquina, para poner pocas opciones lado a lado.
+   */
+  layout?: 'row' | 'stacked'
   /** Additional CSS classes */
   className?: string
 }
@@ -26,10 +31,12 @@ export function OptionTile({
   disabled = false,
   onSelect,
   compact = false,
+  layout = 'row',
   className,
 }: OptionTileProps) {
   const Icon = option.icon
   const isDisabled = disabled || option.disabled
+  const isStacked = layout === 'stacked'
 
   return (
     <button
@@ -43,6 +50,7 @@ export function OptionTile({
           : 'border-border/60 bg-surface hover:border-primary/30',
         isDisabled && 'opacity-50 grayscale-[0.5] cursor-not-allowed hover:border-border/60',
         compact && 'p-2 gap-2',
+        isStacked && 'relative h-full flex-col items-start gap-2.5 p-3',
         className
       )}
       aria-checked={selected}
@@ -62,7 +70,8 @@ export function OptionTile({
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center gap-2">
           <span className={cn(
-            'text-sm font-bold truncate transition-colors',
+            'text-sm font-bold transition-colors',
+            isStacked ? 'line-clamp-2 leading-snug' : 'truncate',
             selected ? 'text-primary' : 'text-foreground'
           )}>
             {option.label}
@@ -82,6 +91,7 @@ export function OptionTile({
 
       <div className={cn(
         'shrink-0 flex items-center justify-center h-4 w-4 rounded-full border-2 transition-all',
+        isStacked && 'absolute right-3 top-3',
         selected 
           ? 'bg-primary border-primary' 
           : 'bg-transparent border-muted-foreground/30 group-hover:border-primary/50'

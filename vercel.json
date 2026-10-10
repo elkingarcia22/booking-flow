@@ -1,4 +1,9 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/((?!api/).*)",
@@ -37,14 +42,8 @@
     }
   ],
   "functions": {
-    "api/feedback/analyze.ts": {
-      "maxDuration": 60
+    "api/tts/index.ts": {
+      "maxDuration": 30
     }
-  },
-  "crons": [
-    {
-      "path": "/api/feedback/analyze",
-      "schedule": "0 13 * * 5"
-    }
-  ]
+  }
 }

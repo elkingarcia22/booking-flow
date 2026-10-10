@@ -14,17 +14,20 @@ import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
  * sede la elige y cierra; «Ver detalle» abre su perfil sin salir de la ventana
  * (con «Volver» a la lista). Con citas ya apartadas cambiar vacía la reserva
  * (barberos y precios son de cada sede): la sede queda marcada y el pie pide
- * confirmarlo antes.
+ * confirmarlo antes. Sin sede elegida (sin cuenta) el campo va vacío; la
+ * apertura se puede llevar desde fuera para que Servicios o Barbero la pidan.
  */
-export function AgendaBranchField({ labelledBy, eyebrow }: { labelledBy: string; eyebrow?: string }) {
+export function AgendaBranchField({ labelledBy, eyebrow, open: openProp, onOpenChange }: { labelledBy: string; eyebrow?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const t = useAppT();
   const { shop, state, dispatch, fmt } = useBookingFlow();
-  const [open, setOpen] = React.useState(false);
+  const [openState, setOpenState] = React.useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
   const [pending, setPending] = React.useState<string | null>(null);
   const [viewing, setViewing] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const current = shop.branches.find((branch) => branch.id === state.branchId);
-  if (shop.branches.length < 2 || !current) return null;
+  if (shop.branches.length < 2) return null;
 
   const openChange = (next: boolean) => {
     setOpen(next);
@@ -79,11 +82,11 @@ export function AgendaBranchField({ labelledBy, eyebrow }: { labelledBy: string;
         asCard
         eyebrow={eyebrow}
         labelledBy={labelledBy}
-        imageUrl={current.imageUrl}
+        imageUrl={current?.imageUrl}
         icon="building"
-        value={current.name}
-        detail={`${current.address}, ${current.city}`}
-        placeholder={t("booking.agenda.whereLabel")}
+        value={current?.name}
+        detail={current ? `${current.address}, ${current.city}` : undefined}
+        placeholder={t("booking.agenda.wherePlaceholder")}
         open={open}
         onOpen={() => setOpen(true)}
         testId="agenda-branch-field"

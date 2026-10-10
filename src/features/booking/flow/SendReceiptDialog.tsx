@@ -1,5 +1,5 @@
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "./bookingToast";
 import { useAppT } from "@/app/i18n";
 import { Field, PhoneInput } from "@/components/forms";
 import { Text } from "@/components/typography";
@@ -14,6 +14,7 @@ import { useResetOnChange } from "@/lib/useResetOnChange";
 import { useSendReceiptMutation } from "../queries";
 import type { Reservation } from "../types";
 import { BookingSheet } from "./BookingSheet";
+import { toastMissing } from "./missingData";
 
 type Channel = "email" | "sms";
 
@@ -61,7 +62,7 @@ export function SendReceiptDialog({ reservation, onOpenChange }: SendReceiptDial
   const toggle = (channel: Channel) => (checked: boolean) => setChannels((current) => (checked ? [...current, channel] : current.filter((entry) => entry !== channel)));
 
   const submit = async () => {
-    if (!reservation || channels.length === 0) return;
+    if (!reservation || toastMissing(t, [channels.length === 0 && t("booking.receipt.pickChannel")])) return;
     const sent: string[] = [];
     const failed: Partial<Record<Channel, string>> = {};
     for (const channel of channels) {
@@ -84,7 +85,7 @@ export function SendReceiptDialog({ reservation, onOpenChange }: SendReceiptDial
       title={t("booking.receipt.sendTitle")}
       description={t("booking.receipt.sendLead")}
       actions={
-        <Button type="button" className="w-full" onClick={() => void submit()} disabled={send.isPending || channels.length === 0}>
+        <Button type="button" className="w-full" onClick={() => void submit()} disabled={send.isPending}>
           {send.isPending ? <Spinner size="sm" tone="inverse" /> : <ThemaIcon name="mail" />}
           {channels.length > 1 ? t("booking.receipt.sendBoth") : t("booking.receipt.send")}
         </Button>

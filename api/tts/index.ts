@@ -1,4 +1,4 @@
-import { isSameOrigin, readJsonBody } from "../../server/feedback/http.js";
+import { isSameOrigin, readJsonBody } from "../../server/http/request.js";
 import { readTtsConfig, synthesize } from "../../server/tts/tts.js";
 
 /**

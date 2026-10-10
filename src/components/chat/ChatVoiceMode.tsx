@@ -149,7 +149,7 @@ function VoiceSession({ onClose, onWrite, onSend, ask: askProp, lang: langProp, 
       aria-modal="true"
       aria-label={t("chat.voiceMode")}
       data-testid="chat-voice"
-      className={cn("fixed inset-0 z-dialog flex flex-col overflow-y-auto bg-background text-text-primary outline-none", appearance === "immersive" && "dark ai-mesh-agent")}
+      className={cn("fixed inset-0 z-dialog flex flex-col overflow-hidden bg-background text-text-primary outline-none", appearance === "immersive" && "dark ai-mesh-agent")}
     >
       {backdrop}
       <header className="relative flex shrink-0 items-center gap-3 px-4 py-3 sm:px-6">
@@ -163,38 +163,41 @@ function VoiceSession({ onClose, onWrite, onSend, ask: askProp, lang: langProp, 
         </span>
       </header>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 py-8 text-center">
-        {/* Las ondas: tocarlas pausa o retoma, como el micrófono de la píldora. */}
-        <button
-          type="button"
-          onClick={toggleMic}
-          disabled={blocked}
-          aria-label={listening ? t("chat.voicePause") : t("chat.voiceResume")}
-          className="w-full max-w-xl rounded-3xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40"
-          data-testid="chat-voice-waves"
-        >
-          {/* Mientras habla Clipper, las ondas se mueven con cada palabra que dice. */}
-          <ChatVoiceWaves state={status === "thinking" ? "thinking" : listening || speaking ? "listening" : "idle"} pulse={speaking ? spokenWords : heard} className="h-40 w-full sm:h-48" />
-        </button>
+      {/* Solo el centro se desplaza (una respuesta larga, muchas opciones): la cabecera y la barra quedan fijas. */}
+      <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="flex min-h-full flex-col items-center justify-center gap-6 px-6 py-8 text-center">
+          {/* Las ondas: tocarlas pausa o retoma, como el micrófono de la píldora. */}
+          <button
+            type="button"
+            onClick={toggleMic}
+            disabled={blocked}
+            aria-label={listening ? t("chat.voicePause") : t("chat.voiceResume")}
+            className="w-full max-w-xl rounded-3xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40"
+            data-testid="chat-voice-waves"
+          >
+            {/* Mientras habla Clipper, las ondas se mueven con cada palabra que dice. */}
+            <ChatVoiceWaves state={status === "thinking" ? "thinking" : listening || speaking ? "listening" : "idle"} pulse={speaking ? spokenWords : heard} className="h-40 w-full sm:h-48" />
+          </button>
 
-        <h1 className="max-w-3xl text-balance text-2xl font-semibold tracking-tight sm:text-4xl" aria-live="polite">
-          {heard ? `«${heard}»` : blocked ? t(status === "denied" ? "chat.voiceDenied" : "chat.voiceUnsupported") : conversation && reply ? t("chat.voiceYourTurn") : t("chat.voiceEmpty")}
-        </h1>
+          <h1 className="max-w-3xl text-balance text-2xl font-semibold tracking-tight sm:text-4xl" aria-live="polite">
+            {heard ? `«${heard}»` : blocked ? t(status === "denied" ? "chat.voiceDenied" : "chat.voiceUnsupported") : conversation && reply ? t("chat.voiceYourTurn") : t("chat.voiceEmpty")}
+          </h1>
 
-        {reply && (
-          <VoiceReply
-            reply={reply}
-            allFollowups={conversation}
-            onFollowup={(text) => {
-              if (conversation) return submit(text);
-              onSend(text);
-              onClose();
-            }}
-          />
-        )}
+          {reply && (
+            <VoiceReply
+              reply={reply}
+              allFollowups={conversation}
+              onFollowup={(text) => {
+                if (conversation) return submit(text);
+                onSend(text);
+                onClose();
+              }}
+            />
+          )}
+        </div>
       </div>
 
-      <div className="relative flex shrink-0 justify-center px-4 pb-8">
+      <div className="relative flex shrink-0 justify-center px-4 pb-8 pt-3">
         <div className="flex w-full max-w-xl items-center gap-3 rounded-full border border-border/60 bg-surface/80 p-2 shadow-card backdrop-blur" data-testid="chat-voice-controls">
           {/* Un solo botón para el micrófono: escuchando se pausa, en pausa se retoma. */}
           <button

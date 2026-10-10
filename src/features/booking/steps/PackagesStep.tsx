@@ -9,6 +9,7 @@ import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../flow/BookingContext";
+import { toastMissing } from "../flow/missingData";
 import { brandFromName, isCvcComplete, type CardValues } from "../flow/cardValidation";
 import { NewCardSheet } from "../flow/NewCardSheet";
 import { NEW_CARD, SavedCardPicker } from "../flow/SavedCardPicker";
@@ -79,12 +80,13 @@ export function PackagesStep() {
 
   const pay = () => {
     setShowErrors(true);
-    if (!chosen) return;
+    if (toastMissing(t, [!chosen && t("booking.packages.chooseError")]) || !chosen) return;
     if (!chosenSaved && !card) {
+      toastMissing(t, [t("booking.payment.cardMissing")]);
       setSheet({ open: true, prefill: false });
       return;
     }
-    if (chosenSaved && !isCvcComplete(savedCvc, brandFromName(chosenSaved.brand))) return;
+    if (chosenSaved && toastMissing(t, [!isCvcComplete(savedCvc, brandFromName(chosenSaved.brand)) && t("booking.payment.cvcMissing")])) return;
     buy.mutate(
       { packageId: chosen.id, savedCardId: chosenSaved?.id, card: !chosenSaved && card ? { number: card.number, name: card.name, expiry: card.expiry, save: saveCard } : undefined },
       {
@@ -101,7 +103,7 @@ export function PackagesStep() {
       title={t("booking.packages.title")}
       lead={t("booking.packages.lead")}
       footer={
-        <Button type="button" size="lg" className="w-full" disabled={buy.isPending || !chosen} onClick={pay}>
+        <Button type="button" size="lg" className="w-full" disabled={buy.isPending} onClick={pay}>
           {buy.isPending ? <Spinner size="sm" tone="inverse" /> : <ThemaIcon name="lock" />}
           {t("booking.packages.pay", { amount: fmt.money(chosen?.price ?? 0) })}
         </Button>
@@ -124,7 +126,12 @@ export function PackagesStep() {
       )}
 
       <section className="flex flex-col gap-2">
-        <Heading level={6}>{t("booking.packages.choose")}</Heading>
+        <Heading level={6} className={cn(showErrors && !chosen && "text-destructive")}>{t("booking.packages.choose")}</Heading>
+        {showErrors && !chosen && (
+          <Text role="alert" size="sm" tone="negative" weight="medium">
+            {t("booking.packages.chooseError")}
+          </Text>
+        )}
         <div role="radiogroup" aria-label={t("booking.packages.choose")} className="flex flex-col gap-2">
           {offers.map((offer) => {
             const saving = Math.max(0, offer.regular - offer.price);
