@@ -22,6 +22,6 @@ siempre. Para probar: celular `320 217 2738` (cliente que vuelve) y código `246
 
 1. Importa el repo en Vercel (detecta Vite; `vercel.json` ya fija instalación, build y rutas).
 2. Opcional, la voz natural de Clipper: en *Settings → Environment Variables* agrega
-   `ELEVENLABS_API_KEY` (o `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION`, u `OPENAI_API_KEY`).
+   `GEMINI_API_KEY` (gratis en aistudio.google.com; o `ELEVENLABS_API_KEY`, `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION`, u `OPENAI_API_KEY`).
    Sin ninguna, Clipper usa la voz del navegador. Detalle en `.env.example`.
 3. Despliega. Las rutas del cliente caen en `index.html`; `/api/tts` es la función de la voz.

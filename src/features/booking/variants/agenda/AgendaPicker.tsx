@@ -1,13 +1,29 @@
 import * as React from "react";
 import { useAppT } from "@/app/i18n";
-import { DrawerShell } from "@/components/overlays";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon, type IconName } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
-import { DRAWER_FIT_STYLE, sheetSide } from "../../flow/drawerFit";
+import { BookingOverlay } from "../../flow/BookingOverlay";
+import { overlayKind } from "../../flow/drawerFit";
+
+/**
+ * La Agenda en lista: la misma agenda, pero las preguntas van en filas (también en tablet y monitor) y,
+ * fuera del celular, cada lista se abre ahí mismo debajo de su fila en vez de en una hoja o un modal.
+ */
+const AgendaListModeContext = React.createContext(false);
+export const AgendaListModeProvider = AgendaListModeContext.Provider;
+export const useAgendaListMode = () => React.useContext(AgendaListModeContext);
+
+/** ¿Las listas se abren en su sitio? En la Agenda en lista, fuera del celular y el widget. */
+export function useInlineLists(): boolean {
+  const listMode = useAgendaListMode();
+  const { layout, touch } = useBookingFlow();
+  return listMode && (layout === "wide" || touch === "lg");
+}
 
 /**
  * Las dos piezas de la Agenda con selector: un campo que se lee como un select
@@ -33,15 +49,43 @@ interface PickerFieldProps {
   asCard?: boolean;
   /** El nombre del campo dentro de la fila («Sede»), cuando no lleva título encima (celular). */
   eyebrow?: string;
+  /** Aún no se puede responder (falta la sede): apagado y sin abrir. */
+  disabled?: boolean;
+  /** Ya respondida: borde y fondo de marca para distinguirla de las que faltan. Por defecto, si tiene `value`. */
+  selected?: boolean;
+  /** El número de la pregunta en «Arma tu cita» (1 sede, 2 servicios…), delante del `eyebrow`. */
+  step?: number;
 }
 
-export function PickerField({ labelledBy, imageUrl, icon, round = false, value, detail, placeholder, open, onOpen, testId, asCard = false, eyebrow }: PickerFieldProps) {
+/** El número de una pregunta de «Arma tu cita»: círculo lleno del color de marca, bien visible en claro y en oscuro. */
+export function StepNumber({ value, className }: { value: number; className?: string }) {
+  return (
+    <span aria-hidden className={cn("flex size-5 shrink-0 items-center justify-center rounded-full bg-primary [&>span]:text-primary-foreground", className)}>
+      <Text as="span" size="xs" weight="semibold" tabular>
+        {value}
+      </Text>
+    </span>
+  );
+}
+
+/** El nombre del campo, encima de lo elegido. */
+function Eyebrow({ text }: { text: string }) {
+  return (
+    <Text as="span" size="xs" tone="muted" className="truncate">
+      {text}
+    </Text>
+  );
+}
+
+export function PickerField({ labelledBy, imageUrl, icon, round = false, value, detail, placeholder, open, onOpen, testId, asCard = false, eyebrow, step, selected = Boolean(value), disabled = false }: PickerFieldProps) {
   const { touch, layout } = useBookingFlow();
+  const listMode = useAgendaListMode();
+  const inline = useInlineLists();
   const valueId = React.useId();
-  // Tarjeta solo donde caben en fila (tablet y monitor); en celular, la fila de siempre.
-  const isDense = asCard && (layout === "wide" || touch === "lg");
-  // Donde la lista entra por el lado (tablet y monitor), la flecha apunta hacia allá.
-  const opensAside = sheetSide({ layout, touch }) === "right";
+  // Tarjeta solo donde caben en fila (tablet y monitor); en celular y en la Agenda en lista, la fila de siempre.
+  const isDense = asCard && !listMode && (layout === "wide" || touch === "lg");
+  // En monitor la lista abre en un modal: la flecha apunta a la derecha; donde sube desde abajo, hacia abajo.
+  const opensAside = !inline && overlayKind({ layout, touch }) === "modal";
   const arrow = opensAside ? (
     <ThemaIcon name="chevronRight" size="sm" tone="muted" className="shrink-0 transition-transform duration-fast group-hover:translate-x-0.5" />
   ) : (
@@ -49,33 +93,42 @@ export function PickerField({ labelledBy, imageUrl, icon, round = false, value, 
   );
   const base = cn(
     // Fondo de tarjeta, no de página: en claro el campo se despegaba del fondo solo por un filo.
-    "group w-full rounded-xl border border-input bg-surface text-left shadow-xs outline-none transition-[border-color,box-shadow] duration-fast",
-    "hover:border-primary/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    "group w-full rounded-xl border text-left shadow-xs outline-none transition-[border-color,box-shadow,background-color] duration-fast",
+    "hover:border-primary/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+    // Siempre con fondo sólido (va sobre la foto). Respondida: filo de marca y un tinte encima del fondo, no en vez de él.
+    "bg-surface",
+    // Apagada: el contenido tenue, el fondo sólido (una tarjeta transparente dejaba ver la foto de atrás).
+    "disabled:cursor-not-allowed disabled:shadow-none disabled:hover:border-input [&:disabled>*]:opacity-50",
+    selected && !disabled ? "border-primary/60 bg-[linear-gradient(hsl(var(--primary)/0.06),hsl(var(--primary)/0.06))]" : "border-input"
   );
 
-  // Como tarjetas, una al lado de la otra: foto arriba y el texto debajo, a dos líneas.
+  // Como tarjetas, una al lado de la otra. Dos franjas que se alinean entre las tres: arriba el número y el
+  // nombre de la pregunta («1 · SEDE») con la flecha; debajo, el icono o la foto junto a lo elegido.
   if (isDense) {
     return (
-      <button type="button" aria-haspopup="dialog" aria-expanded={open} aria-labelledby={`${labelledBy} ${valueId}`} onClick={onOpen} data-testid={testId} className={cn(base, "flex h-full flex-col", layout === "wide" ? "gap-3 p-3" : "gap-2 p-2.5")}>
-        <span className="flex w-full items-start justify-between gap-2">
-          <IconTile size={layout === "wide" ? "md" : "sm"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} tone={value ? "primary" : "neutral"} />
-          {arrow}
-        </span>
-        <span id={valueId} className="flex w-full min-w-0 flex-col">
+      <button type="button" aria-haspopup="dialog" aria-expanded={open} aria-labelledby={`${labelledBy} ${valueId}`} disabled={disabled} onClick={onOpen} data-testid={testId} className={cn(base, "flex h-full flex-col", layout === "wide" ? "gap-3 p-4" : "gap-2.5 p-3")}>
+        <span className="flex w-full items-center gap-2">
+          {step !== undefined && <StepNumber value={step} className="size-6" />}
           {eyebrow && (
-            <Text as="span" size="xs" tone="muted" className="truncate">
+            <Text as="span" size="xs" weight="semibold" tone="muted" className="truncate uppercase tracking-wide">
               {eyebrow}
             </Text>
           )}
-          {/* En tarjetas angostas, las palabras largas («Massachusetts») parten en vez de cortarse. */}
-          <Text as="span" size="sm" weight="medium" tone={value ? "default" : "muted"} className="line-clamp-2 hyphens-auto [overflow-wrap:anywhere]" lang="es">
-            {value ?? placeholder}
-          </Text>
-          {value && detail && (
-            <Text as="span" size="xs" tone="muted" tabular className="line-clamp-2 [overflow-wrap:anywhere]">
-              {detail}
+          <span className="ml-auto">{arrow}</span>
+        </span>
+        <span className="flex w-full min-w-0 items-center gap-3">
+          <IconTile size={layout === "wide" ? "md" : "sm"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} tone={value ? "primary" : "neutral"} />
+          <span id={valueId} className="flex min-w-0 flex-1 flex-col">
+            {/* En tarjetas angostas, las palabras largas («Massachusetts») parten en vez de cortarse. */}
+            <Text as="span" size="sm" weight={value ? "semibold" : "medium"} tone={value ? "default" : "muted"} className="line-clamp-2 hyphens-auto [overflow-wrap:anywhere]" lang="es">
+              {value ?? placeholder}
             </Text>
-          )}
+            {value && detail && (
+              <Text as="span" size="xs" tone="muted" tabular className="line-clamp-1 [overflow-wrap:anywhere]">
+                {detail}
+              </Text>
+            )}
+          </span>
         </span>
       </button>
     );
@@ -87,17 +140,15 @@ export function PickerField({ labelledBy, imageUrl, icon, round = false, value, 
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-labelledby={`${labelledBy} ${valueId}`}
+      disabled={disabled}
       onClick={onOpen}
       data-testid={testId}
       className={cn(base, "flex items-center gap-3 px-3", touch === "lg" ? "min-h-[4.5rem] py-3" : "min-h-16 py-2.5")}
     >
+      {step !== undefined && <StepNumber value={step} className="size-6" />}
       <IconTile size={touch === "lg" ? "lg" : "md"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} tone={value ? "primary" : "neutral"} />
       <span id={valueId} className="flex min-w-0 flex-1 flex-col">
-        {eyebrow && (
-          <Text as="span" size="xs" tone="muted" className="truncate">
-            {eyebrow}
-          </Text>
-        )}
+        {eyebrow && <Eyebrow text={eyebrow} />}
         {value ? (
           <>
             <Text as="span" weight="medium" className="truncate">
@@ -149,7 +200,7 @@ interface PickerOverlayProps {
  */
 export function PickerOverlay({ open, onOpenChange, title, description, footer, focusRef, view = "list", onBack, leading, children }: PickerOverlayProps) {
   const t = useAppT();
-  const { layout, touch } = useBookingFlow();
+  const inline = useInlineLists();
   const bodyRef = React.useRef<HTMLDivElement>(null);
   const backRef = React.useRef<HTMLButtonElement>(null);
   const isDetail = Boolean(onBack);
@@ -157,7 +208,8 @@ export function PickerOverlay({ open, onOpenChange, title, description, footer, 
   const focusSelected = () => {
     const list = focusRef.current;
     const target = list?.querySelector<HTMLElement>('[aria-checked="true"]') ?? list?.querySelector<HTMLElement>("[role=checkbox],[role=radio]");
-    target?.focus();
+    // Sin desplazar: el panel aún está entrando desde abajo y el navegador movía la página de atrás para «mostrarlo».
+    target?.focus({ preventScroll: true });
   };
   const focusList = (event: Event) => {
     event.preventDefault();
@@ -171,7 +223,7 @@ export function PickerOverlay({ open, onOpenChange, title, description, footer, 
     shownView.current = view;
     const scroller = bodyRef.current?.parentElement;
     if (scroller) scroller.scrollTop = 0;
-    if (isDetail) backRef.current?.focus();
+    if (isDetail) backRef.current?.focus({ preventScroll: true });
     else focusSelected();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de vista
   }, [view]);
@@ -198,12 +250,19 @@ export function PickerOverlay({ open, onOpenChange, title, description, footer, 
     </div>
   );
 
+  if (inline) {
+    if (!open) return null;
+    return (
+      <InlinePanel title={title} description={description} heading={hasHeading ? heading : null} footer={footer} onClose={() => onOpenChange(false)} onShown={focusSelected}>
+        {content}
+      </InlinePanel>
+    );
+  }
+
   return (
-    <DrawerShell
+    <BookingOverlay
       open={open}
       onOpenChange={onOpenChange}
-      side={sheetSide({ layout, touch })}
-      contentStyle={DRAWER_FIT_STYLE}
       title={title}
       description={description}
       leading={hasHeading ? heading : undefined}
@@ -212,7 +271,62 @@ export function PickerOverlay({ open, onOpenChange, title, description, footer, 
       disablePadding
     >
       {content}
-    </DrawerShell>
+    </BookingOverlay>
+  );
+}
+
+/** La lista abierta en su sitio (Agenda en lista, fuera del celular): se asoma a la vista y pone el foco en lo elegido. */
+function InlinePanel({ title, description, heading, footer, onClose, onShown, children }: { title: string; description?: string; heading: React.ReactNode; footer?: React.ReactNode; onClose: () => void; onShown: () => void; children: React.ReactNode }) {
+  const t = useAppT();
+  const ref = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    onShown();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir
+  }, []);
+  return (
+    <section
+      ref={ref}
+      aria-label={title}
+      className="flex scroll-mt-4 flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-200"
+    >
+      <header className="flex items-start gap-3 border-b border-border bg-muted/30 px-4 py-3">
+        {heading}
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Text as="span" weight="semibold">
+            {title}
+          </Text>
+          {description && (
+            <Text as="span" size="xs" tone="muted">
+              {description}
+            </Text>
+          )}
+        </span>
+        <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label={t("common.close")} className="-mr-1 shrink-0">
+          <ThemaIcon name="close" />
+        </Button>
+      </header>
+      <div className="max-h-[26rem] overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">{children}</div>
+      {footer && <footer className="flex flex-col gap-2 border-t border-border bg-muted/30 px-4 py-3">{footer}</footer>}
+    </section>
+  );
+}
+
+/** Desde cuántas opciones la lista lleva buscador. */
+export const PICKER_SEARCH_FROM = 7;
+
+/** Sin tildes ni mayúsculas, para buscar «andres» y encontrar «Andrés». */
+export const plainText = (value: string): string => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+/** El buscador de arriba de una lista larga; se queda pegado al desplazar. */
+export function PickerSearch({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div className="sticky top-0 z-10 bg-popover px-4 pb-2 pt-3">
+      <div className="relative">
+        <ThemaIcon name="search" size="sm" tone="muted" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
+        <Input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={placeholder} className="pl-9" />
+      </div>
+    </div>
   );
 }
 

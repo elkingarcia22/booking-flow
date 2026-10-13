@@ -22,6 +22,8 @@ import { looksLikeDetail, useChatProfiles } from "./chatProfiles";
 /** Al no haber hueco a la hora pedida: cuántas horas cercanas y cuántos barberos libres a esa hora se ofrecen. */
 const NEAR_TIMES = 2;
 const NEAR_OTHERS = 2;
+/** «Sí», «dale», «sí, por favor»: aceptar lo que se propone. */
+const SAYS_YES = /^(si|dale|claro|de una|listo|va|vale|ok|okay|perfecto|bueno|yes|sure|yeah)\b/;
 const plain = (value: string): string => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 import { activeQuestionTurn, capitalize, DAYS_OFFERED, firstName, isKnownAnswer, nextId, reducedMotion, RELATIONS, TYPING_MS, type ChatReplyId, type ChatTurn, type Expecting, type Handlers, type MessageInput, type PaymentEvent } from "./chatKit";
 import { MAX_REFERENCE_PHOTOS } from "../../flow/referencePhoto";
@@ -495,8 +497,8 @@ export function useChatBooking({
       if (takeIntent()) return;
       return startBooking();
     }
-    // La membresía no va en el saludo: se cuenta en el pago, como en las otras versiones.
-    const extra = [customer.upcoming > 0 ? t("booking.chat.upcomingLine", { count: customer.upcoming }) : "", customer.credit > 0 ? t("booking.welcome.credit", { amount: fmt.money(customer.credit) }) : ""].filter(Boolean);
+    // Un saludo corto: la membresía se cuenta en el pago y las citas próximas están en «Mis citas».
+    const extra = [customer.credit > 0 ? t("booking.welcome.credit", { amount: fmt.money(customer.credit) }) : ""].filter(Boolean);
     say({ text: [t("booking.chat.knownHello", { name: customer.firstName }), ...extra].join("\n\n") });
     if (pendingManage.current) return manage();
     if (takeIntent()) return;
@@ -519,7 +521,8 @@ export function useChatBooking({
     if (customer.upcoming > 0) entries.push({ label: t("booking.chat.reply.manage"), value: "manage", emoji: "📅" });
     if (shop.packages.length > 0) entries.push({ label: t("booking.packages.cta"), value: "packages", emoji: "🎟️" });
     if (shop.payment.card) entries.push({ label: t("booking.gift.cta"), value: "gift", emoji: "🎁" });
-    const lead = next ? t(next.isOverdue ? "booking.chat.dueOverdue" : "booking.chat.due", { service: serviceNames(next.serviceIds), days: next.everyDays }) : undefined;
+    // Invita a decir de una vez cuándo; «sí» o «el viernes a las 5» agendan lo de siempre (`interpret`).
+    const lead = next ? t("booking.chat.dueAsk", { service: serviceNames(next.serviceIds) }) : undefined;
     ask(makeQuestion("home", next ? t("booking.chat.homeTitleDue") : t("booking.chat.homeTitle"), entries), lead);
   };
 
@@ -718,6 +721,15 @@ export function useChatBooking({
     if (parsed.intent === "manage") return manage();
     if (parsed.intent === "pay") return payOrIdentify();
     if (parsed.intent === "help") return say({ text: t("booking.chat.help") });
+    // A la propuesta del saludo («¿Te agendamos tu Ritual premium de siempre?»): un día, una hora o un «sí» es lo de siempre.
+    const lastVisit = stateRef.current.customer?.lastVisit;
+    if (lastVisit && parsed.serviceIds.length === 0 && activeQuestionTurn(turnsRef.current)?.question?.kind === "home") {
+      if (parsed.date || parsed.time || parsed.window) {
+        apply({ type: "repeatLastVisit", lastVisit });
+        return fulfil(parsed);
+      }
+      if (SAYS_YES.test(plain(text).trim())) return onHome("repeat");
+    }
     // Sin sede aún no hay servicios ni barberos que reconocer: se guarda lo pedido, se pregunta la
     // sede y, al elegirla, se vuelve a entender (`startBooking`). Así «corte con Andrés» no se pierde.
     if (!stateRef.current.branchId && parsed.intent !== "another") {

@@ -95,10 +95,36 @@ export function useChatCheckout(kit: CheckoutKit) {
     return [lines.join("\n"), rows.join(" · "), `**${t("booking.payment.total")}: ${fmt.money(sums.total)}**`].join("\n\n");
   };
 
+  /**
+   * Al empezar a pagar, dicho como una persona: el servicio, con quién y cuándo, cuánto es y sus
+   * impuestos. La propina se pregunta justo después y el recargo se dice al elegir tarjeta.
+   */
+  const checkoutIntro = (): string => {
+    const current = stateRef.current;
+    const sums = totalsRef.current;
+    const subtotal = fmt.money(sums.subtotal);
+    const tax = fmt.money(sums.tax);
+    const productCount = Object.values(current.products).reduce((sum, qty) => sum + qty, 0);
+    const item = current.items[0];
+    if (current.items.length === 1 && productCount === 0 && item) {
+      return t("booking.chat.checkoutOne", {
+        services: serviceNames(item.serviceIds),
+        barber: item.barberId ? t("booking.chat.withName", { name: barberName(item.barberId) }) : t("booking.chat.withAny"),
+        when: item.start ? fmt.when(parseStart(item.start)) : "",
+        subtotal,
+        tax,
+      });
+    }
+    const products = productCount > 0 ? t("booking.chat.checkoutProducts", { count: productCount }) : "";
+    return t("booking.chat.checkoutMany", { count: current.items.length, products, subtotal, tax });
+  };
+
   const checkout = async () => {
     const current = stateRef.current;
     if (current.items.length === 0) return void askServices(t("booking.chat.nothingYet"));
     apply({ type: "goTo", step: "payment" });
+    // La propina se pregunta enseguida: hasta que la diga, no se suma ninguna (ni la de por defecto).
+    apply({ type: "setTip", tipId: null });
     // Primera visita: el descuento prometido se aplica solo, como en las otras versiones (PromoField).
     if (current.customer?.isNew && !current.promo && FIRST_VISIT_PROMO) {
       const promo = await bookingApi.checkPromo(current.token, { code: FIRST_VISIT_PROMO.code, appointments: current.items.length }).catch(() => null);
@@ -106,7 +132,7 @@ export function useChatCheckout(kit: CheckoutKit) {
     }
     // El resumen y la propina se arman al decirlos, ya con el descuento en las cuentas.
     say(
-      () => ({ text: [t("booking.chat.checkoutLead"), orderText()].join("\n\n") }),
+      () => ({ text: checkoutIntro() }),
       () => {
         const services = totalsRef.current.services;
         const entries: QuestionEntry[] = [
@@ -121,11 +147,8 @@ export function useChatCheckout(kit: CheckoutKit) {
   const askDiscount = () =>
     say(() => {
       const sums = totalsRef.current;
-      // La membresía se cuenta aquí, en el pago: la cortesía si la tiene, o cuánto suma esta cita.
-      const loyalty = stateRef.current.customer?.loyalty ?? null;
-      const reward = loyalty?.rewardName || t("booking.loyalty.rewardFallback");
-      const membership = loyalty && sums.reward === 0 && loyalty.available === 0 ? t("booking.loyalty.thisVisit", { count: Math.min(loyalty.every, loyalty.progress + 1), total: loyalty.every }) : "";
-      const perks = [sums.prepaid > 0 ? t("booking.chat.perkPackage", { amount: fmt.money(sums.prepaid) }) : "", sums.reward > 0 ? t("booking.chat.perkReward", { amount: fmt.money(sums.reward) }) : "", membership ? `**${t("booking.loyalty.title")}:** ${membership}${loyalty && loyalty.progress + 1 >= loyalty.every ? ` ${t("booking.loyalty.earns", { reward })}` : ""}` : ""].filter(Boolean).join(" ");
+      // Solo lo que ahorra (paquete o cortesía); el avance de la membresía no se dice aquí, alargaba la pregunta.
+      const perks = [sums.prepaid > 0 ? t("booking.chat.perkPackage", { amount: fmt.money(sums.prepaid) }) : "", sums.reward > 0 ? t("booking.chat.perkReward", { amount: fmt.money(sums.reward) }) : ""].filter(Boolean).join(" ");
       return { text: perks || undefined, question: makeQuestion("discount", t("booking.chat.discountTitle"), [{ label: t("booking.chat.discountNo"), value: "none" }], { otherLabel: t("booking.chat.discountYes"), otherPlaceholder: t("booking.chat.discountPlaceholder") }) };
     });
 
@@ -347,7 +370,7 @@ export function useChatCheckout(kit: CheckoutKit) {
         return say({ text: t("booking.chat.askCvc", { card: card ? `${card.brand} •••• ${card.last4}` : "" }) });
       }
       case "confirm":
-        return value === "pay" ? payment.current?.pay() : askMore();
+        return value === "pay" ? payment.current?.pay({ askTip: false }) : askMore();
       case "after":
         return onAfter(value);
       case "receiptTo":

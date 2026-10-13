@@ -17,7 +17,7 @@ import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
  * confirmarlo antes. Sin sede elegida (sin cuenta) el campo va vacío; la
  * apertura se puede llevar desde fuera para que Servicios o Barbero la pidan.
  */
-export function AgendaBranchField({ labelledBy, eyebrow, open: openProp, onOpenChange }: { labelledBy: string; eyebrow?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+export function AgendaBranchField({ labelledBy, eyebrow, step, open: openProp, onOpenChange }: { labelledBy: string; eyebrow?: string; step?: number; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const t = useAppT();
   const { shop, state, dispatch, fmt } = useBookingFlow();
   const [openState, setOpenState] = React.useState(false);
@@ -81,6 +81,7 @@ export function AgendaBranchField({ labelledBy, eyebrow, open: openProp, onOpenC
       <PickerField
         asCard
         eyebrow={eyebrow}
+        step={step}
         labelledBy={labelledBy}
         imageUrl={current?.imageUrl}
         icon="building"

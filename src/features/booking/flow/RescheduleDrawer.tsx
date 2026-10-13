@@ -3,7 +3,6 @@ import { startOfDay } from "date-fns";
 import { toast } from "./bookingToast";
 import { useAppT } from "@/app/i18n";
 import { Spinner } from "@/components/feedback/Spinner";
-import { DrawerShell } from "@/components/overlays";
 import { TimeSlotPicker } from "@/components/scheduling";
 import { Text } from "@/components/typography";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,7 +16,7 @@ import { clockMinutes, dayKeyOf, isSameDayAs, isTodayOver, parseStart, toStart }
 import { useAvailabilityQuery, useRescheduleMutation } from "../queries";
 import type { BookedAppointment } from "../types";
 import { useBookingFlow } from "./BookingContext";
-import { DRAWER_FIT_STYLE, sheetSide } from "./drawerFit";
+import { BookingOverlay } from "./BookingOverlay";
 
 const HOUR = 60;
 const WINDOW_DAYS = 42;
@@ -35,7 +34,7 @@ interface RescheduleDrawerProps {
  */
 export function RescheduleDrawer({ appointment, token, onOpenChange }: RescheduleDrawerProps) {
   const t = useAppT();
-  const { shop, fmt, touch, layout } = useBookingFlow();
+  const { shop, fmt, touch } = useBookingFlow();
   const reschedule = useRescheduleMutation(token);
   const [day, setDay] = React.useState(() => startOfDay(new Date()));
   const [picked, setPicked] = React.useState<Date | null>(null);
@@ -70,11 +69,9 @@ export function RescheduleDrawer({ appointment, token, onOpenChange }: Reschedul
   };
 
   return (
-    <DrawerShell
+    <BookingOverlay
       open={appointment !== null}
       onOpenChange={onOpenChange}
-      side={sheetSide({ layout, touch })}
-      contentStyle={DRAWER_FIT_STYLE}
       size="lg"
       title={t("booking.reschedule.title")}
       description={appointment ? t("booking.reschedule.lead", { service: appointment.serviceNames.join(" + "), barber: appointment.barberName }) : undefined}
@@ -124,6 +121,6 @@ export function RescheduleDrawer({ appointment, token, onOpenChange }: Reschedul
           )}
         </div>
       )}
-    </DrawerShell>
+    </BookingOverlay>
   );
 }

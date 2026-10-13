@@ -3,9 +3,12 @@ import { useAppT } from "@/app/i18n";
 import { NumberField } from "@/components/forms";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
+import { IconTile } from "@/components/utility/IconTile";
+import { ThemaIcon } from "@/icons";
 import { useBookingFlow } from "../../flow/BookingContext";
 import type { BookingProduct } from "../../types";
-import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
+import { ADD_CARD_CLASS, AddCardArrow } from "../../flow/AddCard";
+import { PickerOverlay, PickerRow } from "./AgendaPicker";
 
 const MAX_QTY = 9;
 /** Cuántos nombres caben en el campo antes de resumir con «y N más». */
@@ -24,9 +27,12 @@ export function AgendaProductField({ labelledBy }: { labelledBy: string }) {
   const [open, setOpen] = React.useState(false);
   const [picks, setPicks] = React.useState<Picks>(state.products);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const hintId = React.useId();
   const products = catalog?.products ?? [];
   if (products.length === 0) return null;
 
+  const categoryOf = (product: BookingProduct) => product.category || t("booking.products.other");
+  const groups = [...new Set(products.map(categoryOf))].map((category) => ({ category, items: products.filter((product) => categoryOf(product) === category) }));
   const chosen = products.filter((product) => (state.products[product.id] ?? 0) > 0);
   const amountOf = (source: Picks) => products.reduce((sum, product) => sum + product.price * (source[product.id] ?? 0), 0);
   const countOf = (source: Picks) => Object.values(source).reduce((sum, qty) => sum + qty, 0);
@@ -81,50 +87,71 @@ export function AgendaProductField({ labelledBy }: { labelledBy: string }) {
 
   return (
     <>
-      <PickerField
-        labelledBy={labelledBy}
-        imageUrl={chosen[0]?.imageUrl}
-        icon="layers"
-        value={chosen.length > 0 ? names : undefined}
-        detail={chosen.length > 0 ? fmt.money(amountOf(state.products)) : undefined}
-        placeholder={t("booking.agenda.productsPlaceholder", { count: products.length })}
-        open={open}
-        onOpen={openPicker}
-        testId="agenda-products-field"
-      />
+      {/* Igual que «Agregar otra cita»: algo que se suma, no un dato que falte. */}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-labelledby={labelledBy}
+        aria-describedby={hintId}
+        onClick={openPicker}
+        data-testid="agenda-products-field"
+        className={ADD_CARD_CLASS}
+      >
+        <IconTile size="md" src={chosen[0]?.imageUrl} icon={<ThemaIcon name={chosen.length > 0 ? "layers" : "plus"} />} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <Text as="span" weight="semibold" className="truncate">
+            {chosen.length > 0 ? names : t("booking.agenda.productsAdd")}
+          </Text>
+          <Text as="span" id={hintId} size="xs" tone="muted" tabular className="truncate">
+            {chosen.length > 0 ? fmt.money(amountOf(state.products)) : t("booking.agenda.productsHint", { count: products.length })}
+          </Text>
+        </span>
+        <AddCardArrow />
+      </button>
       <PickerOverlay open={open} onOpenChange={setOpen} title={t("booking.agenda.productsTitle")} description={t("booking.agenda.productsLead")} footer={footer} focusRef={listRef}>
-        <div ref={listRef} className="flex flex-col gap-0.5 p-2">
-          {products.map((product) => {
-            const qty = picks[product.id] ?? 0;
-            return (
-              <PickerRow
-                key={product.id}
-                role="checkbox"
-                checked={qty > 0}
-                label={`${product.name} · ${fmt.money(product.price)}`}
-                imageUrl={product.imageUrl}
-                icon="layers"
-                onClick={() => setQty(product.id, qty > 0 ? 0 : 1)}
-                below={
-                  qty > 0 ? (
-                    <NumberField size="sm" stepper="sides" min={0} max={MAX_QTY} value={qty} onValueChange={(value) => setQty(product.id, value ?? 0)} aria-label={t("booking.agenda.productsQty", { name: product.name })} className="w-28" />
-                  ) : undefined
-                }
-              >
-                <Text as="span" weight="medium" className="truncate">
-                  {product.name}
+        {/* Por categoría, como la carta de servicios: el título de cada grupo y sus productos debajo. */}
+        <div ref={listRef} className="flex flex-col gap-4 px-2 pb-3 pt-1">
+          {groups.map((group) => (
+            <section key={group.category} aria-label={group.category} className="flex flex-col gap-0.5">
+              {groups.length > 1 && (
+                <Text as="h3" size="xs" weight="medium" tone="muted" className="px-2 pb-1 pt-2 uppercase tracking-wide">
+                  {group.category}
                 </Text>
-                {product.description && (
-                  <Text as="span" size="xs" tone="muted" className="line-clamp-1">
-                    {product.description}
-                  </Text>
-                )}
-                <Text as="span" size="xs" weight="medium" tabular>
-                  {fmt.money(product.price)}
-                </Text>
-              </PickerRow>
-            );
-          })}
+              )}
+              {group.items.map((product) => {
+                const qty = picks[product.id] ?? 0;
+                return (
+                  <PickerRow
+                    key={product.id}
+                    role="checkbox"
+                    checked={qty > 0}
+                    label={`${product.name} · ${fmt.money(product.price)}`}
+                    imageUrl={product.imageUrl}
+                    icon="layers"
+                    onClick={() => setQty(product.id, qty > 0 ? 0 : 1)}
+                    below={
+                      qty > 0 ? (
+                        <NumberField size="sm" stepper="sides" min={0} max={MAX_QTY} value={qty} onValueChange={(value) => setQty(product.id, value ?? 0)} aria-label={t("booking.agenda.productsQty", { name: product.name })} className="w-28" />
+                      ) : undefined
+                    }
+                  >
+                    <Text as="span" weight="medium" className="truncate">
+                      {product.name}
+                    </Text>
+                    {product.description && (
+                      <Text as="span" size="xs" tone="muted" className="line-clamp-1">
+                        {product.description}
+                      </Text>
+                    )}
+                    <Text as="span" size="xs" weight="medium" tabular>
+                      {fmt.money(product.price)}
+                    </Text>
+                  </PickerRow>
+                );
+              })}
+            </section>
+          ))}
         </div>
       </PickerOverlay>
     </>

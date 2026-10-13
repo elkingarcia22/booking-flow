@@ -1,7 +1,5 @@
 import * as React from "react";
-import { DrawerShell } from "@/components/overlays";
-import { useBookingFlow } from "./BookingContext";
-import { DRAWER_FIT_STYLE, sheetSide } from "./drawerFit";
+import { BookingOverlay } from "./BookingOverlay";
 
 interface BookingSheetProps {
   open: boolean;
@@ -16,22 +14,18 @@ interface BookingSheetProps {
 /**
  * Las decisiones cortas de la reserva (cambiar de sede, para quién es, cancelar,
  * enviar el recibo): en celular, tablet y widget suben desde abajo, al alcance
- * del pulgar, como cualquier hoja de una app; en monitor entran por la derecha.
- * Un modal centrado se siente de escritorio dentro de una pantalla de celular.
+ * del pulgar, como cualquier hoja de una app; en monitor son un modal centrado.
  */
 export function BookingSheet({ open, onOpenChange, title, description, actions, children }: BookingSheetProps) {
-  const { layout, touch } = useBookingFlow();
   return (
-    <DrawerShell
+    <BookingOverlay
       open={open}
       onOpenChange={onOpenChange}
-      side={sheetSide({ layout, touch })}
-      contentStyle={DRAWER_FIT_STYLE}
       title={title}
       description={description}
       actions={actions}
     >
       {children}
-    </DrawerShell>
+    </BookingOverlay>
   );
 }

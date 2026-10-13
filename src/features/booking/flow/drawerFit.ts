@@ -8,11 +8,11 @@ import type * as React from "react";
 export const DRAWER_FIT_STYLE: React.CSSProperties = { maxHeight: "calc(100% - 1.5rem)" };
 
 /**
- * De qué lado entran las hojas de la reserva: desde abajo en el celular y el widget (al alcance
- * del pulgar); como panel lateral en tablet y monitor, donde sobra ancho.
+ * Cómo se abren las ventanas de la reserva: en celular, tablet y widget como hoja que sube desde
+ * abajo (al alcance del pulgar); en monitor, donde sobra pantalla, como modal centrado.
  */
-export function sheetSide({ layout, touch }: { layout: "compact" | "wide"; touch: "default" | "lg" }): "bottom" | "right" {
-  return layout === "compact" && touch === "default" ? "bottom" : "right";
+export function overlayKind({ layout }: { layout: "compact" | "wide"; touch: "default" | "lg" }): "sheet" | "modal" {
+  return layout === "wide" ? "modal" : "sheet";
 }
 
 /**

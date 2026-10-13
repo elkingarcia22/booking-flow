@@ -75,8 +75,10 @@
   animation: clipper-orb-rotate 6s linear infinite;
 }
 
-/* La esfera base: el gradiente de IA de un lado al otro. */
+/* La esfera base: el gradiente de IA de un lado al otro. Aislada: las franjas se multiplican solo con ella,
+   no con el botón o la página de debajo. */
 .clipper-orb__sphere {
+  isolation: isolate;
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -113,6 +115,37 @@
   animation: clipper-orb-spin 3.2s linear infinite;
 }
 
+/*
+ * Chico (junto a un texto, en un botón): el SVG de franjas con `multiply` se rompía a 14–24 px. Aquí las
+ * franjas son una sola capa de degradado repetido, más alta que la esfera, que sube un periodo y vuelve:
+ * sin baldosas (en sus uniones la diagonal no empalmaba y el orbe se veía torcido). A 45°, subir
+ * `periodo × √2` en vertical deja las franjas exactamente donde estaban.
+ */
+@keyframes clipper-orb-rise-small {
+  to {
+    transform: translateY(calc(var(--clipper-orb-size) * -0.25 * 1.41421));
+  }
+}
+
+.clipper-orb[data-small] .clipper-orb__sphere::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 calc(var(--clipper-orb-size) * -0.4) 0;
+  background-image: repeating-linear-gradient(135deg, var(--clipper-orb-stripe-small) 0 calc(var(--clipper-orb-size) * 0.12), transparent calc(var(--clipper-orb-size) * 0.12) calc(var(--clipper-orb-size) * 0.25));
+  animation: clipper-orb-rise-small 2.4s linear infinite;
+}
+
+.clipper-orb[data-small] {
+  --clipper-orb-stripe-small: hsl(var(--background) / 0.35);
+  perspective: none;
+}
+
+/* A ese tamaño el borde oscuro del vidrio ensuciaba el color: solo el brillo. */
+.clipper-orb[data-small] .clipper-orb__glass {
+  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.6), transparent 40%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
 /* ── Estados ───────────────────────────────────────────────────────── */
 
 /* Escuchando: gira más rápido y la esfera late. */
@@ -132,6 +165,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .clipper-orb,
+  .clipper-orb[data-small] .clipper-orb__sphere::before,
   .clipper-orb *,
   .clipper-orb *::after {
     animation: none !important;
@@ -156,4 +190,13 @@ html:not(.dark) .clipper-orb__glass {
   box-shadow:
     inset 0 0 0 1px hsl(var(--foreground) / 0.1),
     0 calc(var(--clipper-orb-size) * 0.08) calc(var(--clipper-orb-size) * 0.22) rgba(var(--color-ai-stop-2-rgb), 0.35);
+}
+
+html:not(.dark) .clipper-orb[data-small] {
+  --clipper-orb-stripe-small: hsl(var(--foreground) / 0.22);
+}
+
+html:not(.dark) .clipper-orb[data-small] .clipper-orb__glass {
+  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.65), transparent 40%);
+  box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.1);
 }

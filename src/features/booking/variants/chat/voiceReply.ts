@@ -1,5 +1,6 @@
 import type { ChatReply } from "@/lib/chat";
 import type { ChatTurn } from "./chatKit";
+import type { QuestionKind } from "./chatQuestions";
 import { numberWordsToDigits } from "./spokenNumbers";
 
 /** Cuántas opciones se dicen en voz alta; con más, se dicen las primeras y se remite a la lista. */
@@ -7,16 +8,42 @@ const SPOKEN_OPTIONS = 4;
 const SAMPLE_OPTIONS = 3;
 
 export interface VoiceReplyLabels {
-  /** «Puedes decir {list}»: todas las opciones caben en la frase. */
+  /** «Puede ser {list}.»: todas las opciones caben en la frase. */
   oneOf: (list: string) => string;
-  /** «Por ejemplo: {list}, o mira la lista»: se dicen algunas. */
+  /** «Por ejemplo, {list}. Las demás las ves en pantalla.»: se dicen algunas. */
   someOf: (list: string) => string;
+  /** «¿Cuándo quieres venir?»: el día y la hora en una sola pregunta abierta. */
+  when: string;
+  /** «Tengo {list}. ¿Te sirve alguna?…»: unas pocas horas propuestas, dichas como lo haría una persona. */
+  propose: (list: string) => string;
 }
+
+/**
+ * Preguntas que en voz se hacen abiertas, sin leer la lista: la persona ya sabe qué contestar
+ * («corte y barba», «con Andrés», «el viernes a las 5») y oír las opciones alarga la llamada.
+ * Siguen en pantalla para tocarlas. Las demás (sí o no, qué hacemos sin horas…) sí se leen.
+ */
+const OPEN_KINDS: ReadonlySet<QuestionKind> = new Set(["home", "branch", "person", "relation", "services", "barber", "day", "time", "products", "tip", "more", "editPick", "manage"]);
+
+/**
+ * ¿Se leen las opciones? Las de las preguntas abiertas, no; salvo las horas cuando son unas pocas
+ * propuestas (la pedida no estaba libre: «a las 4 y 30 o Andrés a las 5»), que sin decirlas no se sabe qué elegir.
+ */
+const speaksOptions = (kind: QuestionKind, count: number) => !OPEN_KINDS.has(kind) || (kind === "time" && count <= SPOKEN_OPTIONS);
 
 /** Instrucciones para escribir que, dichas, se vuelven para hablar; y lo que solo importa al teclear. */
 const VOICE_WORDING: Record<string, ReadonlyArray<[RegExp, string]>> = {
   es: [
+    // Los ejemplos y los formatos son para quien escribe: dichos, alargan y suenan a formulario.
+    [/\s*(?:Por ejemplo|Ej)\.?:?\s[^.!?]*[.!?]?/g, ""],
+    [/\s*Escr[ií]bel[oa] así:[^.!?]*[.!?]?/g, ""],
+    [/,? \*{0,2}solo los números\*{0,2}/g, ""],
+    [/:\s*\d{2}\/\d{2}(?=[.\s]|$)/g, ""],
     [/,? sin espacios ni signos/g, ""],
+    // Tras mandar el código: reenviar o cambiar el número se entienden si se dicen; no hace falta enseñarlos.
+    [/\s*¿No te llegó\?[\s\S]*$/, ""],
+    [/\bpor WhatsApp\b/g, "por mensaje de texto"],
+    [/(?:Escr[ií]belo|Dímelo) aquí/g, "Dímelo"],
     [/\bEscr[ií]beme\b/g, "Dime"],
     [/\bescr[ií]beme\b/g, "dime"],
     [/\bEscr[ií]belo\b/g, "Dímelo"],
@@ -25,9 +52,23 @@ const VOICE_WORDING: Record<string, ReadonlyArray<[RegExp, string]>> = {
     [/\bescr[ií]bela\b/g, "dímela"],
     [/\bEscribe\b/g, "Di"],
     [/\bescribe\b/g, "di"],
+    // Dicho en voz, como lo pediría una persona (y sin cerrar en «tu…», que la voz alargaba).
+    [/Dime tu (\*{0,2})número de celular\1\./g, "¿Me das tu $1número de celular$1?"],
+    [/Dímelo (?:aquí )?abajo/g, "Dímelo"],
+    [/\s*Elige en la lista o escr[ií]bemelo\./g, ""],
+    [/\bPuedes escribirme\b/g, "Puedes pedirme"],
+    [/,? como \*{0,2}MM\/AA\*{0,2}/g, ""],
   ],
   en: [
+    [/\s*(?:For example|E\.g)\.?:?\s[^.!?]*[.!?]?/g, ""],
+    [/,? \*{0,2}digits only\*{0,2}/g, ""],
+    [/:\s*\d{2}\/\d{2}(?=[.\s]|$)/g, ""],
     [/,? no spaces or symbols/g, ""],
+    [/\s*Didn['’]t get it\?[\s\S]*$/, ""],
+    [/\bon WhatsApp\b/g, "by text message"],
+    [/\bvia WhatsApp\b/g, "by text message"],
+    [/(?:Type it|Tell me) here\b/g, "Tell me"],
+    [/\bby WhatsApp\b/g, "by text message"],
     [/\bType\b/g, "Tell me"],
     [/\btype\b/g, "tell me"],
   ],
@@ -190,24 +231,47 @@ export function saysOnlyOption(text: string, option: string, locale: string): bo
   return rest.length === 0;
 }
 
+/**
+ * Una opción dicha dentro de una frase: «Pagar en la barbería» → «pagar en la barbería». Los nombres
+ * propios («Apple Pay o Google Pay», «Andrés») se quedan como están.
+ */
+function asSpokenOption(option: string): string {
+  const [first = "", ...rest] = option.split(" ");
+  const hasOtherCapitals = rest.some((word) => /^[A-ZÁÉÍÓÚÑ]/.test(word));
+  return !hasOtherCapitals && /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/.test(first) ? option.charAt(0).toLowerCase() + option.slice(1) : option;
+}
+
 const endsSentence = (text: string) => /[.!?…:]$/.test(text.trim());
 const sentence = (text: string) => (endsSentence(text) ? text.trim() : `${text.trim()}.`);
 
 /**
  * Lo que Clipper dice en el modo voz tras lo que dijo la persona: sus mensajes nuevos de la
- * conversación (la misma que se escribe), la pregunta abierta y sus opciones dichas como frase
- * («las 2:00, las 2:30 o las 3:00»). Las opciones vuelven también para tocarlas en pantalla.
+ * conversación (la misma que se escribe) y la pregunta abierta, corta. Las listas que la persona
+ * ya sabe contestar (servicios, barberos, días, horas) no se leen; las demás sí, como frase
+ * («sí, con Andrés o ver los otros»). Las opciones vuelven siempre para tocarlas en pantalla.
  */
 export function voiceReplyFromTurns(turns: readonly ChatTurn[], locale: string, labels: VoiceReplyLabels): ChatReply {
   const said = turns.filter((turn) => turn.from === "agent");
   const texts = said.map((turn) => turn.text?.trim()).filter((text): text is string => Boolean(text));
   const question = [...said].reverse().find((turn) => turn.question)?.question;
   const parts = [...texts];
-  if (question?.title && !texts.some((text) => text.includes(question.title as string))) parts.push(question.title);
+  // El día se pregunta abierto: si dice día y hora, queda lista; si solo el día, después se pide la hora.
+  // El saludo ya invita a decir cuándo; el título de sus botones («¿Te sirve alguna de estas horas?») sobra dicho.
+  const title = question?.kind === "day" ? labels.when : question?.kind === "home" && texts.length > 0 ? undefined : question?.title;
+  if (title && !texts.some((text) => text.includes(title))) parts.push(title);
   const options = question?.options ?? [];
-  if (options.length > 0) {
-    const list = new Intl.ListFormat(locale, { type: "disjunction" });
-    parts.push(options.length <= SPOKEN_OPTIONS ? labels.oneOf(list.format(options)) : labels.someOf(list.format(options.slice(0, SAMPLE_OPTIONS))));
+  const list = new Intl.ListFormat(locale, { type: "disjunction" });
+  if (question?.kind === "time" && options.length > 0 && speaksOptions(question.kind, options.length)) {
+    // Horas propuestas (la pedida no estaba libre): solo las horas, sin «Ver todas las horas», y la puerta abierta a otra.
+    const times = options.filter((option) => /\d/.test(option));
+    if (times.length > 0) {
+      if (title) parts.pop();
+      parts.push(labels.propose(list.format(times)));
+    }
+  } else if (options.length > 1 && question && speaksOptions(question.kind, options.length)) {
+    // Una sola opción («No, continuar») no se lee: la pregunta ya se contesta sola.
+    const spoken = options.map(asSpokenOption);
+    parts.push(options.length <= SPOKEN_OPTIONS ? labels.oneOf(list.format(spoken)) : labels.someOf(list.format(spoken.slice(0, SAMPLE_OPTIONS))));
   }
   // Lo mismo dos veces seguidas (el mensaje y el título de su pregunta) se dice una vez.
   const unique = parts.filter((part, index) => index === 0 || plainWords(part) !== plainWords(parts[index - 1]));

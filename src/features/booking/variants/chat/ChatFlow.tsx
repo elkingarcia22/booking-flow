@@ -145,7 +145,7 @@ export function ChatFlow({ headerTrailing, onFinish }: ChatFlowProps) {
   const [isVoiceOpen, setIsVoiceOpen] = React.useState(arrival !== null);
   React.useEffect(() => clearVoiceOnArrival(), []);
   // Cada experiencia conserva su orden: desde la Agenda con selector, el celular se pide al final.
-  const engine = useChatBooking({ onFinish, payment: controllerRef, deferStart: true, identityAt: arrival === "agenda-select" ? "last" : "first" });
+  const engine = useChatBooking({ onFinish, payment: controllerRef, deferStart: true, identityAt: arrival === "agenda-select" || arrival === "agenda-list" ? "last" : "first" });
   const startChat = (text?: string) => {
     setIsHome(false);
     engine.begin(text);

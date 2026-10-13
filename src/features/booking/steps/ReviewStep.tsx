@@ -4,10 +4,8 @@ import { useAppT } from "@/app/i18n";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Heading, Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { MagicCard } from "@/components/ui/magic-card";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { personName } from "../bookingState";
@@ -20,6 +18,7 @@ import { ProductCard } from "../flow/ProductCard";
 import { PickedProducts } from "../flow/PickedProducts";
 import { ProductCatalogDrawer } from "../flow/ProductCatalogDrawer";
 import { PersonSheet } from "../flow/PersonPicker";
+import { AddCard } from "../flow/AddCard";
 import { StepLayout } from "../flow/StepLayout";
 import { itemDuration, itemPrice } from "../useBookingTotals";
 
@@ -128,17 +127,8 @@ export function ReviewStep() {
             />
           );
         })}
-        <MagicCard onClick={() => dispatch({ type: "addAnother", person: { kind: "self" } })} contentClassName="items-center gap-3 text-left">
-          <IconTile size="md" icon={<ThemaIcon name="plus" />} />
-          <span className="flex flex-col">
-            <Text weight="semibold" as="span">
-              {t("booking.review.addAnother")}
-            </Text>
-            <Text size="xs" tone="secondary" as="span">
-              {t("booking.review.addAnotherHint")}
-            </Text>
-          </span>
-        </MagicCard>
+        {/* La misma tarjeta que en la Agenda con selector. */}
+        <AddCard title={t("booking.review.addAnother")} hint={t("booking.review.addAnotherHint")} onClick={() => dispatch({ type: "addAnother", person: { kind: "self" } })} />
       </div>
 
       {products.length > 0 && (

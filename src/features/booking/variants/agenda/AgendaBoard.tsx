@@ -19,6 +19,8 @@ import { WaitlistCard } from "../../flow/WaitlistCard";
 import { useAvailabilityQuery, useEarliestQuery } from "../../queries";
 import { ableBarbers, timesByWindow } from "./agendaModel";
 import { TimeWindows } from "./AgendaLanes";
+import { StepNumber, useAgendaListMode } from "./AgendaPicker";
+import { HeldAppointments } from "./HeldAppointments";
 import { AgendaSelectFields } from "./AgendaSelectFields";
 import { DayStrip } from "./DayStrip";
 
@@ -26,6 +28,9 @@ import { DayStrip } from "./DayStrip";
 const sameServices = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((id) => b.includes(id));
 
 /** Cuántos días se recorren en la tira. */
+/** Los avisos van sobre la foto: fondo sólido con el tinte encima, para que no se transparenten. */
+const SOLID_INFO = "bg-surface dark:bg-surface bg-[linear-gradient(hsl(var(--info)/0.08),hsl(var(--info)/0.08))]";
+
 const DAYS_AHEAD = 21;
 const SKELETON_LANES = 3;
 
@@ -42,7 +47,11 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
   const first = React.useMemo(() => (branch ? firstBookableDay(branch.closesAt, shop.minNoticeMinutes) : startOfDay(new Date())), [branch, shop.minNoticeMinutes]);
   const [day, setDay] = React.useState<Date>(first);
   const draft = state.draft;
+
   const serviceIds = draft?.serviceIds ?? [];
+  // Las tres respuestas de arriba: sede, servicios y barbero (que siempre tiene una, «Sin preferencia» de entrada).
+  const isReady = Boolean(state.branchId) && serviceIds.length > 0;
+  const listMode = useAgendaListMode();
   const dayKey = dayKeyOf(day);
 
   // Al cambiar una cita del carrito, la agenda salta a su día.
@@ -104,17 +113,17 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
   return (
     <>
     {/* Encuadrada arriba (donde está la cara) y desvanecida por máscara, para fundirse con cualquier fondo de debajo. */}
-    <div className={cn("relative shrink-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]", layout === "wide" ? "h-72" : "h-56")} aria-hidden>
-      {cover && <img src={cover} alt="" className="size-full object-cover object-[50%_15%] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700" />}
-      {/* En claro la foto va con fuerza (casi sin velo) y solo se funde abajo, bajo las tarjetas: un velo crema
-          encima la dejaba grisácea. En oscuro el velo la cubre entera y el título se lee sobre ella. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 via-30% to-transparent to-65% dark:via-background/85 dark:via-50% dark:to-background/45 dark:to-100%" />
+    <div className={cn("relative shrink-0 overflow-hidden dark:[mask-image:linear-gradient(to_bottom,black_55%,transparent)]", layout === "wide" ? "h-72" : "h-48 dark:h-56")} aria-hidden>
+      {cover && <img src={cover} alt="" className="size-full object-cover object-[50%_15%] brightness-[1.2] dark:brightness-100 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700" />}
+      {/* En claro la foto va entera, sin velo ni desvanecido y algo más clara: cualquier fundido la lavaba de
+          blanco. En oscuro el velo la cubre entera y el título se lee sobre ella. */}
+      <div className="absolute inset-0 hidden bg-gradient-to-t from-background via-background/85 via-50% to-background/45 dark:block" />
     </div>
     {/* Se lee como Paso a paso: una columna centrada, del mismo ancho. */}
-    <div className={cn("relative mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-6", STEP_WIDTH[layout], layout === "wide" ? "-mt-60 px-8 pt-8" : "-mt-48")}>
+    <div className={cn("relative mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-6", STEP_WIDTH[layout], layout === "wide" ? "-mt-60 px-8 pt-8" : "-mt-40 dark:-mt-48")}>
 
       {editing && (
-        <Alert variant="info">
+        <Alert variant="info" className={SOLID_INFO}>
           <ThemaIcon name="edit" />
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>{t("booking.agenda.editing", { name: personName(editing.person, state.customer) || t("booking.person.self") })}</span>
@@ -125,12 +134,8 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
         </Alert>
       )}
 
-      {heldCount > 0 && !editing && (
-        <Alert variant="info">
-          <ThemaIcon name="plus" />
-          <AlertDescription>{t("booking.agenda.addingAnother", { count: heldCount })}</AlertDescription>
-        </Alert>
-      )}
+      {/* Las que ya apartó: se ven de un vistazo y se abren para ver el detalle. */}
+      {heldCount > 0 && !editing && <HeldAppointments count={heldCount} />}
 
       {/* Título y lo que se elige sobre la foto de fondo, sin caja; las horas van debajo. */}
       <section className="flex flex-col gap-5">
@@ -140,32 +145,39 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
         <AgendaSelectFields barbers={barbers} usualId={usualId} onUsual={usual && !editing && !sameServices(usual.serviceIds, serviceIds) ? applyUsual : undefined} />
       </section>
 
-      {/* El día y la hora siempre a la vista, aunque aún no haya nada elegido arriba; las horas, debajo, cuando hay sede y servicio. */}
-      <section aria-labelledby="agenda-when" className="flex flex-col gap-3">
-        <div className="flex min-h-8 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <Text id="agenda-when" size="sm" weight="medium" tone={timeMissing ? "negative" : undefined}>
-            {t("booking.agenda.whenLabel")}
-          </Text>
-          <Text size="sm" tone="muted" className="first-letter:uppercase">
-            {fmt.dayLong(day)}
-          </Text>
-        </div>
-        {timeMissing && (
-          <Text role="alert" size="sm" tone="negative" weight="medium" className="flex items-center gap-1.5">
-            <ThemaIcon name="error" size="sm" tone="negative" />
-            {t("booking.agenda.pickTime")}
-          </Text>
-        )}
-        {/* «Lo antes posible» se calcula con sede y servicio: hasta entonces solo se ven los días. */}
-        {!editing && state.branchId && serviceIds.length > 0 && <EarliestSlot />}
-        <DayStrip first={first} count={DAYS_AHEAD} value={day} onChange={setDay} marked={marked} size={touch} />
-      </section>
+      {/* El día y la hora siempre a la vista, pero apagados hasta tener las tres respuestas de arriba.
+          En la Agenda en lista aparece solo cuando le toca, como cada paso. */}
+      {(!listMode || isReady) && (
+        <section
+          aria-labelledby="agenda-when"
+          aria-disabled={!isReady || undefined}
+          inert={!isReady}
+          className={cn("flex flex-col gap-3 transition-opacity duration-normal", !isReady && "select-none opacity-50")}
+        >
+          <div className="flex min-h-8 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            {/* La última pregunta: después de sede, servicios y barbero. */}
+            <Text id="agenda-when" size="sm" weight="medium" tone={timeMissing ? "negative" : undefined} className="flex items-center gap-2.5">
+              <StepNumber value={shop.branches.length > 1 ? 4 : 3} className="size-6" />
+              {t("booking.agenda.whenLabel")}
+            </Text>
+            <Text size="sm" tone="muted" className="first-letter:uppercase">
+              {fmt.dayLong(day)}
+            </Text>
+          </div>
+          {timeMissing && (
+            <Text role="alert" size="sm" tone="negative" weight="medium" className="flex items-center gap-1.5">
+              <ThemaIcon name="error" size="sm" tone="negative" />
+              {t("booking.agenda.pickTime")}
+            </Text>
+          )}
+          {/* «Lo antes posible» se calcula con sede y servicio: hasta entonces solo se ven los días. */}
+          {!editing && isReady && <EarliestSlot />}
+          <DayStrip first={first} count={DAYS_AHEAD} value={day} onChange={setDay} marked={marked} size={touch} />
+        </section>
+      )}
 
-      {!state.branchId ? (
-        <EmptyState icon="building" title={t("booking.agenda.pickBranch")} />
-      ) : serviceIds.length === 0 ? (
-        <EmptyState icon="scissors" title={t("booking.agenda.pickService")} />
-      ) : (
+      {/* Sin sede o sin servicio no hay aviso abajo: las tarjetas y el día apagado ya dicen qué falta. */}
+      {!isReady ? null : (
         <>
           {isWaiting ? (
             <div className={cn("grid grid-cols-1 gap-3", layout === "wide" && "grid-cols-2")}>

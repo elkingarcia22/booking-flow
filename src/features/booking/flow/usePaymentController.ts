@@ -28,6 +28,8 @@ export function usePaymentController() {
   const [showCardErrors, setShowCardErrors] = React.useState(false);
   // Varias citas pagadas en el local: se explica cómo se cobra antes de que lleguen.
   const [shopNoticeOpen, setShopNoticeOpen] = React.useState(false);
+  // La propina se pregunta en un modal al pulsar «Pagar», no dentro del cobro.
+  const [tipOpen, setTipOpen] = React.useState(false);
   const customer = state.customer;
   const credit = customer?.credit ?? 0;
   // Con tarjetas guardadas abre en la primera que no esté vencida; si no, en «tarjeta nueva».
@@ -85,18 +87,24 @@ export function usePaymentController() {
   const payLabel =
     coveredByGift ? t("booking.gift.payCovered") : deposit > 0 ? t("booking.payment.payDeposit", { amount: fmt.money(deposit) }) : method === "shop" ? t("booking.payment.payShop") : method === "credit" ? t("booking.payment.payCredit") : method === "wallet" ? t("booking.payment.payWallet", { amount: fmt.money(totals.total) }) : t("booking.payment.payNow", { amount: fmt.money(totals.total) });
 
-  const pay = () => {
-    if (!customer || !state.branchId || !method) return;
+  /** Revisa que el cobro esté completo; avisa de lo que falta y dice si se puede seguir. */
+  const validate = () => {
+    if (!customer || !state.branchId || !method) return false;
     if (usesCard && !chosenSaved && !card) {
       toastMissing(t, [t("booking.payment.cardMissing")]);
       setSheet({ open: true, prefill: false });
-      return;
+      return false;
     }
     if (usesCard && (chosenSaved ? !isCvcComplete(savedCvc, brandFromName(chosenSaved.brand)) : !card || !isCardComplete(card))) {
       setShowCardErrors(true);
       toastMissing(t, chosenSaved ? [t("booking.payment.cvcMissing")] : card ? cardMissing(t, card) : [t("booking.payment.cardMissing")]);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const submit = (tipId: string | null) => {
+    if (!customer || !state.branchId || !method) return;
     reserve.mutate(
       {
         branchId: state.branchId,
@@ -109,7 +117,7 @@ export function usePaymentController() {
           start: item.start ?? "",
         })),
         products: Object.entries(state.products).map(([productId, qty]) => ({ productId, qty })),
-        tipId: state.tipId,
+        tipId,
         promoCode: state.promo?.code ?? null,
         giftCode: state.gift?.code,
         useReward: totals.reward > 0,
@@ -124,6 +132,25 @@ export function usePaymentController() {
       },
       { onSuccess: (reservation) => dispatch({ type: "reserved", reservation }) }
     );
+  };
+
+  /**
+   * «Pagar»: si la barbería recibe propinas, antes de cobrar se pregunta en un modal.
+   * La conversación ya la preguntó con sus propias respuestas: pasa `askTip: false`.
+   */
+  const pay = ({ askTip = true }: { askTip?: boolean } = {}) => {
+    if (!validate()) return;
+    if (askTip && shop.tipOptions.length > 0 && !coveredByGift) {
+      setTipOpen(true);
+      return;
+    }
+    submit(state.tipId);
+  };
+  /** Lo que se eligió en el modal de la propina (null = sin propina) y se cobra. */
+  const confirmTip = (tipId: string | null) => {
+    dispatch({ type: "setTip", tipId });
+    setTipOpen(false);
+    submit(tipId);
   };
 
   const chooseCard = (value: string) => {
@@ -170,6 +197,9 @@ export function usePaymentController() {
     setSheet,
     shopNoticeOpen,
     setShopNoticeOpen,
+    tipOpen,
+    setTipOpen,
+    confirmTip,
     cardManager,
   };
 }

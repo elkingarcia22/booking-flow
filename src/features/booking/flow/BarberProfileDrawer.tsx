@@ -1,7 +1,6 @@
 import { useAppT } from "@/app/i18n";
 import * as React from "react";
 import { Chip } from "@/components/ai-interaction";
-import { DrawerShell } from "@/components/overlays";
 import { Heading, Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,7 @@ import { useBookingFlow } from "./BookingContext";
 import { BarberReviews } from "./BarberReviews";
 import { GalleryViewer } from "./GalleryViewer";
 import { PhotoStrip } from "./PhotoStrip";
-import { DRAWER_FIT_STYLE, sheetSide } from "./drawerFit";
+import { BookingOverlay } from "./BookingOverlay";
 
 interface BarberProfileDrawerProps {
   barber: BookingBarber | null;
@@ -29,14 +28,11 @@ const SOCIALS = [
 /** El perfil de un barbero: quién es, sus trabajos y lo que cobra por cada servicio. */
 export function BarberProfileDrawer({ barber, serviceIds, onOpenChange, onChoose }: BarberProfileDrawerProps) {
   const t = useAppT();
-  const { layout, touch } = useBookingFlow();
 
   return (
-    <DrawerShell
+    <BookingOverlay
       open={barber !== null}
       onOpenChange={onOpenChange}
-      side={sheetSide({ layout, touch })}
-      contentStyle={DRAWER_FIT_STYLE}
       title={barber?.name ?? ""}
       description={barber?.level ?? undefined}
       leading={barber ? <BarberAvatar barber={barber} /> : null}
@@ -49,7 +45,7 @@ export function BarberProfileDrawer({ barber, serviceIds, onOpenChange, onChoose
       }
     >
       {barber && <BarberProfileBody barber={barber} serviceIds={serviceIds} />}
-    </DrawerShell>
+    </BookingOverlay>
   );
 }
 

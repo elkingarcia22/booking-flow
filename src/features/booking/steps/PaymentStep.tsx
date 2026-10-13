@@ -13,7 +13,7 @@ import { StepLayout } from "../flow/StepLayout";
 export function PaymentStep() {
   const t = useAppT();
   const payment = usePaymentController();
-  const { layout } = useBookingFlow();
+  const { layout, state, dispatch } = useBookingFlow();
 
   return (
     <StepLayout
@@ -29,7 +29,12 @@ export function PaymentStep() {
       }
     >
       {/* En monitor la cuenta se ve en el resumen de la derecha. */}
-      <PaymentPanel payment={payment} showOrder={layout !== "wide"} />
+      <PaymentPanel
+        payment={payment}
+        showOrder={layout !== "wide"}
+        // Con una cita se vuelve a su hora; con varias, al resumen para elegir cuál.
+        onChangeTime={() => dispatch(state.items.length > 1 ? { type: "goTo", step: "review" } : { type: "reopenLast" })}
+      />
     </StepLayout>
   );
 }

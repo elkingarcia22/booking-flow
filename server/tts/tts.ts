@@ -5,16 +5,19 @@
  * voz del navegador.
  *
  * Proveedores (el primero con clave en este orden, o el de `TTS_PROVIDER`):
- * - `azure` (el elegido): voces neurales de Microsoft, con capa gratuita mensual; una voz por idioma.
+ * - `gemini` (el elegido): la voz de Gemini (Google AI Studio), natural y conversacional, con capa
+ *   gratuita y sin tarjeta; devuelve PCM y aquí se envuelve en WAV.
+ * - `azure`: voces neurales de Microsoft, con capa gratuita mensual; una voz por idioma.
  * - `elevenlabs`: la más natural; una sola voz multilingüe (`TTS_VOICE`) para los dos idiomas.
  * - `openai`: `gpt-4o-mini-tts`, muy conversacional; voces multilingües.
  */
 
-export type TtsProvider = "elevenlabs" | "azure" | "openai";
+export type TtsProvider = "gemini" | "elevenlabs" | "azure" | "openai";
 export type TtsLang = "es" | "en";
 
 export interface TtsConfig {
   provider: TtsProvider | null;
+  geminiKey?: string;
   elevenLabsKey?: string;
   azureKey?: string;
   azureRegion?: string;
@@ -29,6 +32,8 @@ export const MAX_TEXT_LENGTH = 1200;
 
 /** Voces masculinas por defecto: cálidas y naturales, de cada proveedor. */
 const DEFAULT_VOICES: Record<TtsProvider, Record<TtsLang, string>> = {
+  // «Achird», voz masculina amable de Gemini; la misma habla español e inglés.
+  gemini: { es: "Achird", en: "Achird" },
   // «Eric», voz predeterminada de ElevenLabs: la elegida para Clipper. Las predeterminadas funcionan
   // con el plan gratuito; las de la biblioteca (`TTS_VOICE`) piden un plan de pago. El modelo es
   // multilingüe: la misma voz habla español e inglés.
@@ -39,6 +44,13 @@ const DEFAULT_VOICES: Record<TtsProvider, Record<TtsLang, string>> = {
 };
 
 const LOCALE: Record<TtsLang, string> = { es: "es-CO", en: "en-US" };
+/** Gemini se dirige con lenguaje natural: el tono va delante del texto. */
+const GEMINI_STYLE: Record<TtsLang, string> = {
+  es: "Dilo en español latino, con voz cálida, cercana y natural, como un barbero amable que atiende por teléfono",
+  en: "Say it in a warm, friendly, natural voice, like a kind barber answering the phone",
+};
+const GEMINI_MODEL = "gemini-2.5-flash-preview-tts";
+
 const OPENAI_STYLE: Record<TtsLang, string> = {
   es: "Habla en español latino, con voz de hombre cálida, cercana y natural, como un barbero amable que atiende por teléfono. Ritmo conversacional, sin sonar leído.",
   en: "Speak in a warm, friendly, natural male voice, like a kind barber answering the phone. Conversational pace, never sounding read.",
@@ -47,13 +59,15 @@ const OPENAI_STYLE: Record<TtsLang, string> = {
 export function readTtsConfig(env: Record<string, string | undefined> = process.env): TtsConfig {
   const value = (key: string) => env[key]?.trim() || undefined;
   const available: TtsProvider[] = [];
-  // Azure primero: es el elegido (capa gratuita mensual y voces naturales en español e inglés).
+  // Gemini primero: es el elegido (gratis con una clave de Google AI Studio, sin tarjeta).
+  if (value("GEMINI_API_KEY")) available.push("gemini");
   if (value("AZURE_SPEECH_KEY") && value("AZURE_SPEECH_REGION")) available.push("azure");
   if (value("ELEVENLABS_API_KEY")) available.push("elevenlabs");
   if (value("OPENAI_API_KEY")) available.push("openai");
   const wanted = value("TTS_PROVIDER") as TtsProvider | undefined;
   return {
     provider: wanted && available.includes(wanted) ? wanted : (available[0] ?? null),
+    geminiKey: value("GEMINI_API_KEY"),
     elevenLabsKey: value("ELEVENLABS_API_KEY"),
     azureKey: value("AZURE_SPEECH_KEY"),
     azureRegion: value("AZURE_SPEECH_REGION"),
@@ -81,6 +95,18 @@ type Fetcher = typeof fetch;
 function request(config: TtsConfig, text: string, lang: TtsLang): { url: string; init: RequestInit & { headers: Record<string, string> } } {
   const voice = voiceFor(config, lang);
   switch (config.provider) {
+    case "gemini":
+      return {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+        init: {
+          method: "POST",
+          headers: { "x-goog-api-key": config.geminiKey ?? "", "content-type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `${GEMINI_STYLE[lang]}: ${text}` }] }],
+            generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
+          }),
+        },
+      };
     case "elevenlabs":
       return {
         url: `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_64`,
@@ -111,6 +137,38 @@ function request(config: TtsConfig, text: string, lang: TtsLang): { url: string;
   }
 }
 
+const DEFAULT_PCM_RATE = 24000;
+
+/**
+ * Gemini devuelve el audio como PCM de 16 bits en base64 (`audio/L16;codec=pcm;rate=24000`); el navegador
+ * no lo reproduce tal cual, así que se le pone la cabecera WAV. `null` si la respuesta no trae audio.
+ */
+export function geminiToWav(body: unknown): Uint8Array | null {
+  const part = (body as { candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[] })?.candidates?.[0]?.content?.parts?.find((item) => item.inlineData?.data)?.inlineData;
+  if (!part?.data) return null;
+  const pcm = Uint8Array.from(atob(part.data), (char) => char.charCodeAt(0));
+  const rate = Number(/rate=(\d+)/.exec(part.mimeType ?? "")?.[1] ?? DEFAULT_PCM_RATE);
+  const header = new DataView(new ArrayBuffer(44));
+  const ascii = (offset: number, text: string) => [...text].forEach((char, index) => header.setUint8(offset + index, char.charCodeAt(0)));
+  ascii(0, "RIFF");
+  header.setUint32(4, 36 + pcm.length, true);
+  ascii(8, "WAVE");
+  ascii(12, "fmt ");
+  header.setUint32(16, 16, true);
+  header.setUint16(20, 1, true); // PCM
+  header.setUint16(22, 1, true); // mono
+  header.setUint32(24, rate, true);
+  header.setUint32(28, rate * 2, true); // bytes por segundo: 16 bits, mono
+  header.setUint16(32, 2, true);
+  header.setUint16(34, 16, true);
+  ascii(36, "data");
+  header.setUint32(40, pcm.length, true);
+  const wav = new Uint8Array(44 + pcm.length);
+  wav.set(new Uint8Array(header.buffer), 0);
+  wav.set(pcm, 44);
+  return wav;
+}
+
 const json = (status: number, code: string, message: string) => new Response(JSON.stringify({ code, message }), { status, headers: { "content-type": "application/json" } });
 
 /** Valida lo pedido y devuelve el audio del proveedor (o un error sin detalles del proveedor). */
@@ -123,6 +181,11 @@ export async function synthesize(payload: unknown, config: TtsConfig, fetcher: F
   try {
     const upstream = await fetcher(url, init);
     if (!upstream.ok) return json(502, "tts_failed", "El servicio de voz no respondió.");
+    if (config.provider === "gemini") {
+      const wav = geminiToWav(await upstream.json());
+      if (!wav) return json(502, "tts_failed", "El servicio de voz no respondió.");
+      return new Response(wav, { status: 200, headers: { "content-type": "audio/wav", "cache-control": "no-store" } });
+    }
     return new Response(upstream.body, { status: 200, headers: { "content-type": "audio/mpeg", "cache-control": "no-store" } });
   } catch {
     return json(502, "tts_failed", "El servicio de voz no respondió.");

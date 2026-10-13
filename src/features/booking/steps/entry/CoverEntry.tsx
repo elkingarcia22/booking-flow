@@ -28,17 +28,18 @@ export function CoverEntry() {
           donde está la cara, y se desvanece por máscara: un degradado del color del fondo dejaba una línea
           donde el halo aclara el fondo de debajo. */}
       <div
-        className={cn("relative shrink-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]", isWide ? "h-80" : touch === "lg" ? "h-60" : "h-44")}
+        // En claro la foto va entera, sin desvanecer y algo más clara, y la tarjeta la tapa desde su mitad; en oscuro, como estaba.
+        className={cn("relative shrink-0 overflow-hidden dark:[mask-image:linear-gradient(to_bottom,black_45%,transparent)]", isWide ? "h-80" : touch === "lg" ? "h-60" : "h-44")}
         aria-hidden
       >
-        {cover && <img src={cover} alt="" className={cn("size-full object-cover object-[50%_15%] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700")} />}
+        {cover && <img src={cover} alt="" className={cn("size-full object-cover object-[50%_15%] brightness-[1.2] dark:brightness-100 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700")} />}
       </div>
       {/* Clipper arriba a la derecha, sobre la foto: a la vista sin competir con «Continuar». */}
       <div className="absolute right-4 top-4 z-raised">
         <ChatTrigger full />
       </div>
 
-      <div className={cn("relative mx-auto -mt-16 flex w-full flex-1 flex-col gap-6 px-5 pb-6", STEP_WIDTH[layout], isWide && "px-8")}>
+      <div className={cn("relative mx-auto -mt-32 flex dark:-mt-16 w-full flex-1 flex-col gap-6 px-5 pb-6", STEP_WIDTH[layout], isWide && "px-8")}>
         <section className="flex flex-col gap-5 rounded-3xl border border-border bg-surface p-5 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
           <div className="flex items-center gap-3">
             <ShopBrand shop={shop} iconOnly />

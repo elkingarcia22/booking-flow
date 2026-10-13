@@ -25,3 +25,33 @@
     animation: none;
   }
 }
+
+/*
+ * El de contorno: el filo lleva el gradiente de IA girando despacio alrededor del botón, para que se
+ * note sin ser el principal. El ángulo se anima con `@property`; sin soporte, queda el gradiente quieto.
+ */
+@property --ai-border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ai-border-flow {
+  to {
+    --ai-border-angle: 360deg;
+  }
+}
+
+[data-slot="button"].ai-border-flow.ai-border-flow {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(hsl(var(--background)), hsl(var(--background))) padding-box,
+    conic-gradient(from var(--ai-border-angle), var(--color-ai-stop-1), var(--color-ai-stop-2), var(--color-ai-stop-3), var(--color-ai-stop-5), var(--color-ai-stop-1)) border-box !important;
+  animation: ai-border-flow 4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="button"].ai-border-flow.ai-border-flow {
+    animation: none;
+  }
+}

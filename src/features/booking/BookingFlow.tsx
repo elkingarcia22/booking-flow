@@ -35,6 +35,7 @@ import { WelcomeStep } from "./steps/WelcomeStep";
 import type { BookingShop } from "./types";
 import { useBookingEngine } from "./useBookingEngine";
 import { AgendaFlow } from "./variants/agenda/AgendaFlow";
+import { AgendaListModeProvider } from "./variants/agenda/AgendaPicker";
 import { ChatFlow } from "./variants/chat/ChatFlow";
 import type { BookingVersion } from "./versions";
 
@@ -229,9 +230,11 @@ export function BookingFlow({ version = "guided", layout = "compact", touch = "d
         >
           <Halo x="85%" y="0%" size="60% 40%" strength={0.12} />
           <Grain scope="container" />
-          <SwitchToChatProvider value={active === "guided" || active === "agenda-select" ? switchToChat : null}>
-            {active === "agenda-select" ? (
-              <AgendaFlow headerTrailing={headerTrailing} onFinish={onFinish} />
+          <SwitchToChatProvider value={active !== "chat" ? switchToChat : null}>
+            {active === "agenda-select" || active === "agenda-list" ? (
+              <AgendaListModeProvider value={active === "agenda-list"}>
+                <AgendaFlow headerTrailing={headerTrailing} onFinish={onFinish} />
+              </AgendaListModeProvider>
             ) : active === "chat" ? (
               <ChatFlow headerTrailing={headerTrailing} onFinish={onFinish} />
             ) : (

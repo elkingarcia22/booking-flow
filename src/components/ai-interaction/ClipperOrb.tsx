@@ -28,20 +28,26 @@ function stripePath(baseline: number) {
 
 const STRIPES = Array.from({ length: 14 }, (_, i) => stripePath(-96 + i * STRIPE_PERIOD)).join("");
 
+/** Desde este lado (px) hacia abajo el orbe es «chico»: franjas de CSS en vez del SVG, que a ese tamaño se veía roto. */
+const SMALL_ORB = 28;
+
 /**
  * El orbe de Clipper, el agente de IA de Barberlytics: el poste de barbería hecho esfera de vidrio
  * con el gradiente de IA. Tiene vida propia —gira, respira, late— y cambia con lo que hace Clipper
  * (escucha, piensa). No es un icono: es su presencia. Todo es CSS sobre los tokens del gradiente de IA.
  */
 export function ClipperOrb({ size = 128, state = "idle", bare = false, className }: ClipperOrbProps) {
+  const isSmall = size <= SMALL_ORB;
   return (
-    <span aria-hidden data-slot="clipper-orb" data-state={state} className={cn("clipper-orb inline-block", className)} style={{ "--clipper-orb-size": `${size}px` } as React.CSSProperties}>
+    <span aria-hidden data-slot="clipper-orb" data-state={state} data-small={isSmall || undefined} className={cn("clipper-orb inline-block", className)} style={{ "--clipper-orb-size": `${size}px` } as React.CSSProperties}>
       {!bare && <span className="clipper-orb__halo" />}
       {!bare && <span className="clipper-orb__ring" />}
       <span className="clipper-orb__sphere">
-        <svg className="clipper-orb__stripes" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-          <path className="clipper-orb__stripes-band" d={STRIPES} />
-        </svg>
+        {!isSmall && (
+          <svg className="clipper-orb__stripes" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+            <path className="clipper-orb__stripes-band" d={STRIPES} />
+          </svg>
+        )}
       </span>
       <span className="clipper-orb__glass" />
     </span>

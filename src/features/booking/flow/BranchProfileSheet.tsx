@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useAppT } from "@/app/i18n";
-import { DrawerShell } from "@/components/overlays";
 import { Heading, Text } from "@/components/typography";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { WEEK_ORDER, formatPhone, initialsOf, openStateOf, parseStart } from "../bookingFormat";
 import { useBookingCatalogQuery, useBranchDetailQuery } from "../queries";
 import { useBookingFlow } from "./BookingContext";
-import { DRAWER_FIT_STYLE, sheetSide } from "./drawerFit";
+import { BookingOverlay } from "./BookingOverlay";
 import { GalleryViewer } from "./GalleryViewer";
 import { PhotoStrip } from "./PhotoStrip";
 
@@ -42,16 +41,14 @@ interface BranchProfileSheetProps {
  */
 export function BranchProfileSheet({ branchId, onOpenChange, onChoose }: BranchProfileSheetProps) {
   const t = useAppT();
-  const { layout, state, touch } = useBookingFlow();
+  const { state } = useBookingFlow();
   const { data: detail } = useBranchDetailQuery(branchId);
 
   return (
-    <DrawerShell
+    <BookingOverlay
       open={branchId !== null}
       onOpenChange={onOpenChange}
-      side={sheetSide({ layout, touch })}
       size="lg"
-      contentStyle={DRAWER_FIT_STYLE}
       title={detail?.name ?? ""}
       description={detail ? `${detail.address}, ${detail.city}` : undefined}
       leading={<IconTile size="lg" icon={<ThemaIcon name="building" />} src={detail?.gallery[0]} />}
@@ -68,7 +65,7 @@ export function BranchProfileSheet({ branchId, onOpenChange, onChoose }: BranchP
       }
     >
       {branchId && <BranchProfileBody branchId={branchId} />}
-    </DrawerShell>
+    </BookingOverlay>
   );
 }
 

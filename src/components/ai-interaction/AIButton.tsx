@@ -41,7 +41,8 @@ export function AIButton({
   // En los de contorno, el icono también lleva el gradiente de IA: un SVG no toma `background-clip: text`,
   // así que su trazo apunta a un degradado definido aquí.
   const gradientId = `ai-btn-${React.useId().replace(/:/g, "")}`;
-  const iconGradient = isOutline && !disabled ? "[&_*]:[stroke:var(--ai-icon-gradient)]" : undefined;
+  // Solo a los iconos (hijos directos): el orbe tiene su propio dibujo y con ese trazo encima se veía roto.
+  const iconGradient = isOutline && !disabled ? "[&>svg_*]:[stroke:var(--ai-icon-gradient)]" : undefined;
 
   const orbSize = size === "xs" ? 14 : size === "lg" ? 24 : 20;
 
@@ -58,7 +59,8 @@ export function AIButton({
           "relative overflow-hidden transition-all duration-300 font-bold rounded-full",
           // El principal es el poste de Clipper: el gradiente de IA con franjas que suben, como su orbe.
           isPrimary && !disabled && "ai-pole-button border-transparent shadow-ai-premium hover:brightness-105 active:scale-95",
-          isOutline && !disabled && "border-ai-gradient hover:opacity-80 active:scale-95",
+          // El filo con el gradiente de IA dando la vuelta despacio (quieto con «reducir movimiento»).
+          isOutline && !disabled && "ai-border-flow hover:opacity-80 active:scale-95",
           size === "xs" && "h-7 px-3 text-[10px] gap-1",
           size === "sm" && "h-8 px-4 text-xs gap-1.5",
           size === "md" && "h-10 px-6 text-sm gap-2",

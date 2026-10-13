@@ -4,21 +4,16 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import { Text } from "@/components/typography";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { toastMissing } from "../../flow/missingData";
 import type { BookingService } from "../../types";
 import { fromPrice, itemDuration, itemPrice } from "../../useBookingTotals";
-import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
+import { PICKER_SEARCH_FROM, PickerField, PickerOverlay, PickerRow, PickerSearch, plainText as plain } from "./AgendaPicker";
 
-/** Con menos servicios que esto el buscador estorba más de lo que ayuda. */
-const SEARCH_FROM = 7;
 /** Cuántos nombres caben en el campo antes de resumir con «y N más». */
 const NAMES_SHOWN = 2;
-const plain = (value: string): string => value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
  * «Qué te vas a hacer» en la Agenda con selector: un campo que se lee como un
@@ -27,7 +22,7 @@ const plain = (value: string): string => value.toLowerCase().normalize("NFD").re
  * con 30, y las horas libres quedan a la vista. Se elige dentro y se aplica con
  * «Ver horas»; cerrar sin aplicar no cambia nada.
  */
-export function AgendaServiceField({ labelledBy, eyebrow, onNeedBranch }: { labelledBy: string; eyebrow?: string; /** Sin sede no hay carta (es de cada sede): tocar el campo abre primero la sede. */ onNeedBranch?: () => void }) {
+export function AgendaServiceField({ labelledBy, eyebrow, step, onNeedBranch }: { labelledBy: string; eyebrow?: string; step?: number; /** Sin sede no hay carta (es de cada sede): tocar el campo abre primero la sede. */ onNeedBranch?: () => void }) {
   const t = useAppT();
   const { state, dispatch, catalog, catalogLoading, fmt, touch } = useBookingFlow();
   const [open, setOpen] = React.useState(false);
@@ -62,6 +57,9 @@ export function AgendaServiceField({ labelledBy, eyebrow, onNeedBranch }: { labe
       <PickerField
         asCard
         eyebrow={eyebrow}
+        step={step}
+        // Sin sede no hay barberos ni carta: el campo espera apagado.
+        disabled={!state.branchId}
         labelledBy={labelledBy}
         imageUrl={chosen[0]?.imageUrl}
         icon="scissors"
@@ -152,8 +150,10 @@ interface ServicePickerListProps {
 /** La lista de la carta: buscador si hay muchos, agrupada por categoría y con casilla por fila (se pueden varios). */
 const ServicePickerList = React.forwardRef<HTMLDivElement, ServicePickerListProps>(function ServicePickerList({ picked, onToggle, query, onQueryChange }, ref) {
   const t = useAppT();
-  const { catalog, fmt } = useBookingFlow();
-  const services = catalog?.services ?? [];
+  const { state, catalog, fmt } = useBookingFlow();
+  // El barbero se elige antes: con uno elegido, solo lo que él hace.
+  const barber = catalog?.barbers.find((item) => item.id === state.draft?.barberId);
+  const services = (catalog?.services ?? []).filter((service) => !barber || barber.prices[service.id] !== undefined);
   const needle = plain(query.trim());
   const visible = needle === "" ? services : services.filter((service) => plain(`${service.name} ${service.description} ${service.category}`).includes(needle));
   // Por categoría mientras no se busca; buscando, una sola lista con lo que coincide.
@@ -163,14 +163,7 @@ const ServicePickerList = React.forwardRef<HTMLDivElement, ServicePickerListProp
 
   return (
     <div ref={ref} className="flex flex-col">
-      {services.length >= SEARCH_FROM && (
-        <div className="sticky top-0 z-10 bg-popover px-4 pb-2 pt-3">
-          <div className="relative">
-            <ThemaIcon name="search" size="sm" tone="muted" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("booking.services.search")} aria-label={t("booking.services.search")} className="pl-9" />
-          </div>
-        </div>
-      )}
+      {services.length >= PICKER_SEARCH_FROM && <PickerSearch value={query} onChange={onQueryChange} placeholder={t("booking.services.search")} />}
 
       {services.length === 0 ? (
         <EmptyState icon="scissors" title={t("booking.services.emptyBranch")} />

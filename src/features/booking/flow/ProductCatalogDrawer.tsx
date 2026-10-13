@@ -2,13 +2,12 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Chip } from "@/components/ai-interaction";
 import { EmptyState } from "@/components/feedback/EmptyState";
-import { DrawerShell } from "@/components/overlays";
 import { Heading, Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemaIcon } from "@/icons";
 import { useBookingFlow } from "./BookingContext";
-import { DRAWER_FIT_STYLE, sheetSide } from "./drawerFit";
+import { BookingOverlay } from "./BookingOverlay";
 import { ProductCard } from "./ProductCard";
 
 const ALL = "__all__";
@@ -26,7 +25,7 @@ interface ProductCatalogDrawerProps {
  */
 export function ProductCatalogDrawer({ open, onOpenChange }: ProductCatalogDrawerProps) {
   const t = useAppT();
-  const { catalog, state, fmt, layout, touch } = useBookingFlow();
+  const { catalog, state, fmt, layout } = useBookingFlow();
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState(ALL);
   const products = catalog?.products ?? [];
@@ -44,11 +43,9 @@ export function ProductCatalogDrawer({ open, onOpenChange }: ProductCatalogDrawe
   const amount = picked.reduce((sum, [id, qty]) => sum + (products.find((product) => product.id === id)?.price ?? 0) * qty, 0);
 
   return (
-    <DrawerShell
+    <BookingOverlay
       open={open}
       onOpenChange={onOpenChange}
-      side={sheetSide({ layout, touch })}
-      contentStyle={DRAWER_FIT_STYLE}
       size="lg"
       title={t("booking.products.title")}
       description={t("booking.products.lead", { count: products.length })}
@@ -100,6 +97,6 @@ export function ProductCatalogDrawer({ open, onOpenChange }: ProductCatalogDrawe
           ))
         )}
       </div>
-    </DrawerShell>
+    </BookingOverlay>
   );
 }
