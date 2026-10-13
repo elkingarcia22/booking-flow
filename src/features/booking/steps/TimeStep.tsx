@@ -64,7 +64,8 @@ export function TimeStep() {
             {services.join(" + ")} · {t("booking.review.minutes", { count: minutes })}
           </Text>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "goTo", step: "barber" })}>
+        {/* «Cambiar» vuelve al comienzo de lo elegido: los servicios (siguen marcados) y luego el barbero. */}
+        <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "goTo", step: "services" })}>
           {t("booking.time.change")}
         </Button>
       </div>

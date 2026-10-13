@@ -62,6 +62,7 @@ export function AgendaSelectFields({ barbers, usualId, onUsual }: AgendaSelectFi
   const needBranch = hasBranches ? () => setBranchOpen(true) : undefined;
   const isWide = layout === "wide";
   // Las preguntas van numeradas: sede, servicios y barbero; con una sola sede, Servicios es la 1.
+  // En la Agenda en lista no: aparecen de a una y el número no aporta.
   const first = hasBranches ? 2 : 1;
   // En celular (y el widget) no caben tres en fila: van una debajo de otra, como filas.
   const asCards = (isWide || touch === "lg") && !listMode;
@@ -70,7 +71,7 @@ export function AgendaSelectFields({ barbers, usualId, onUsual }: AgendaSelectFi
     <div className={asCards ? cn("grid items-stretch", isWide ? "gap-3" : "gap-2", hasBranches ? "grid-cols-3" : "grid-cols-2") : "flex flex-col gap-2"}>
       {hasBranches && (
         <FieldSection id="agenda-where" label={t("booking.step.branch")} inline>
-          <AgendaBranchField labelledBy="agenda-where" eyebrow={t("booking.step.branch")} step={1} open={branchOpen} onOpenChange={setBranchOpen} />
+          <AgendaBranchField labelledBy="agenda-where" eyebrow={t("booking.step.branch")} step={listMode ? undefined : 1} open={branchOpen} onOpenChange={setBranchOpen} />
         </FieldSection>
       )}
       {showServices && (
@@ -88,12 +89,12 @@ export function AgendaSelectFields({ barbers, usualId, onUsual }: AgendaSelectFi
             )
           }
         >
-          <AgendaServiceField labelledBy="agenda-what" eyebrow={t("booking.step.services")} step={first} onNeedBranch={needBranch} />
+          <AgendaServiceField labelledBy="agenda-what" eyebrow={t("booking.step.services")} step={listMode ? undefined : first} onNeedBranch={needBranch} />
         </FieldSection>
       )}
       {showBarber && (
         <FieldSection id="agenda-who" label={t("booking.step.barber")} inline className={reveal}>
-          <AgendaBarberField labelledBy="agenda-who" barbers={barbers} usualId={usualId} eyebrow={t("booking.step.barber")} step={first + 1} onNeedBranch={needBranch} />
+          <AgendaBarberField labelledBy="agenda-who" barbers={barbers} usualId={usualId} eyebrow={t("booking.step.barber")} step={listMode ? undefined : first + 1} onNeedBranch={needBranch} />
         </FieldSection>
       )}
     </div>

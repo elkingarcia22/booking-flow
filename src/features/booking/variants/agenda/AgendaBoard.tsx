@@ -157,7 +157,7 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
           <div className="flex min-h-8 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             {/* La última pregunta: después de sede, servicios y barbero. */}
             <Text id="agenda-when" size="sm" weight="medium" tone={timeMissing ? "negative" : undefined} className="flex items-center gap-2.5">
-              <StepNumber value={shop.branches.length > 1 ? 4 : 3} className="size-6" />
+              {!listMode && <StepNumber value={shop.branches.length > 1 ? 4 : 3} className="size-6" />}
               {t("booking.agenda.whenLabel")}
             </Text>
             <Text size="sm" tone="muted" className="first-letter:uppercase">
