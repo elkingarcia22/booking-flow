@@ -17,7 +17,7 @@ const NAMES_SHOWN = 2;
 type Picks = Readonly<Record<string, number>>;
 
 /**
- * Lo que se lleva de la tienda en la Agenda con selector: el mismo campo y la
+ * Lo que se lleva de la tienda en la Agenda: el mismo campo y la
  * misma ventana que los servicios. Se marca lo que quiere, con su cantidad en la
  * misma fila, y se aplica con «Agregar»; cerrar sin aplicar no cambia nada.
  */

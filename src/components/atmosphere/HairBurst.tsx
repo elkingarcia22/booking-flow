@@ -2,6 +2,9 @@ import * as React from "react";
 
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
+import { CuttingScissors, type CuttingScissorsHandle } from "./CuttingScissors";
+import { cutPointAt, openingAt, scissorsAt, snipTimes, SWEEP_MS } from "./scissorsPath";
+import { createSnipPlayer } from "./scissorSnipSound";
 
 const MAX_DPR = 2;
 /** Tope y piso de pelos, sea cual sea el ancho. */
@@ -14,6 +17,11 @@ const RELEASE_MS = 1400;
 /** Cuánto dura la caída entera, en ms; desde `FADE_START` cada pelo se va apagando. */
 const DURATION_MS = 4600;
 const FADE_START_MS = 3300;
+/** Con tijeras la caída empieza más tarde (en cada corte): dura un poco más. */
+const CUT_DURATION_MS = SWEEP_MS + 3800;
+const CUT_FADE_START_MS = SWEEP_MS + 2500;
+/** Los pelos de un corte no salen todos en el mismo instante. */
+const CUT_SPREAD_MS = 90;
 /** Un fotograma de referencia (60 fps): la física se escala al tiempo real transcurrido. */
 const FRAME_MS = 1000 / 60;
 /** Puntos con que se traza cada pelo; con más, la curva sale lisa. */
@@ -112,6 +120,21 @@ function spawnClipping(width: number, fallScale: number, palette: readonly strin
   };
 }
 
+/**
+ * Un pelo recién cortado: sale de entre las hojas en el momento del corte, con un pequeño salto
+ * hacia los lados y hacia delante (las tijeras siguen avanzando), y desde ahí cae como los demás.
+ */
+function spawnCutClipping(origin: { x: number; y: number }, delay: number, fallScale: number, palette: readonly string[]): Clipping {
+  return {
+    ...spawnClipping(0, fallScale, palette),
+    x: origin.x + (Math.random() - 0.5) * 22,
+    y: origin.y + (Math.random() - 0.5) * 10,
+    vx: (Math.random() - 0.35) * 3.4,
+    vy: -1.4 + Math.random() * 1.8,
+    delay,
+  };
+}
+
 /** La brisa del local: cambia de lado y de fuerza con el tiempo, así no caen en fila. */
 function windAt(elapsed: number, phase: number): number {
   return 0.6 * Math.sin(elapsed / 650 + phase) + 0.3 * Math.sin(elapsed / 240 + phase * 2.3);
@@ -155,6 +178,18 @@ export interface HairBurstProps {
   className?: string;
   /** Pelos por cada 100 px de ancho: unos 37 en un celular, unos 120 en un monitor. */
   density?: number;
+  /**
+   * Unas tijeras cruzan por arriba cortando y el pelo sale de cada corte, en vez de llover
+   * desde el borde.
+   */
+  scissors?: boolean;
+  /** Con `scissors`, suena el «chas» de cada corte (Web Audio, sin archivos). */
+  sound?: boolean;
+  /**
+   * Con `scissors`, la línea que cortan, en px desde arriba del contenedor (el borde del header):
+   * cruzan rectas sobre ella y el pelo sale de ahí. Sin ella, van por arriba ondulando.
+   */
+  cutY?: number;
   /** Al terminar la caída (o enseguida, con «reducir movimiento»). */
   onDone?: () => void;
 }
@@ -168,8 +203,9 @@ export interface HairBurstProps {
  * los lleva de lado. Se apaga en unos 4,5 s. Para repetirla, cambia su `key`.
  * Con `prefers-reduced-motion` no se monta.
  */
-export function HairBurst({ className, density = 10, onDone }: HairBurstProps) {
+export function HairBurst({ className, density = 10, scissors = false, sound = false, cutY, onDone }: HairBurstProps) {
   const ref = React.useRef<HTMLCanvasElement>(null);
+  const scissorsRef = React.useRef<CuttingScissorsHandle>(null);
   const reducedMotion = useReducedMotion();
   const onDoneRef = React.useRef(onDone);
   React.useEffect(() => {
@@ -195,7 +231,16 @@ export function HairBurst({ className, density = 10, onDone }: HairBurstProps) {
     const palette = isDarkBackground() ? HAIR_ON_DARK : HAIR_ON_LIGHT;
     const fallScale = fallScaleFor(rect.height);
     const total = Math.min(MAX_CLIPPINGS, Math.max(MIN_CLIPPINGS, Math.round((rect.width / 100) * density)));
-    let clippings = Array.from({ length: total }, () => spawnClipping(rect.width, fallScale, palette));
+    const snips = scissors ? snipTimes() : [];
+    // Con tijeras, cada pelo sale de uno de los cortes, por turnos: así se reparten a lo ancho.
+    let clippings = Array.from({ length: total }, (_, index) => {
+      if (!scissors) return spawnClipping(rect.width, fallScale, palette);
+      const at = snips[index % snips.length];
+      return spawnCutClipping(cutPointAt(at, rect.width, rect.height, cutY), at + Math.random() * CUT_SPREAD_MS, fallScale, palette);
+    });
+    const duration = scissors ? CUT_DURATION_MS : DURATION_MS;
+    const fadeStart = scissors ? CUT_FADE_START_MS : FADE_START_MS;
+    const player = scissors && sound ? createSnipPlayer() : null;
     const windPhase = Math.random() * Math.PI * 2;
     // El reloj arranca en el primer fotograma: es la misma base que los siguientes.
     let startedAt: number | null = null;
@@ -206,11 +251,16 @@ export function HairBurst({ className, density = 10, onDone }: HairBurstProps) {
       if (startedAt === null) {
         startedAt = now;
         last = now;
+        player?.schedule(snips);
       }
       const elapsed = now - startedAt;
       const dt = Math.min(now - last, 48) / FRAME_MS;
       last = now;
-      const fade = elapsed < FADE_START_MS ? 1 : Math.max(0, 1 - (elapsed - FADE_START_MS) / (DURATION_MS - FADE_START_MS));
+      const fade = elapsed < fadeStart ? 1 : Math.max(0, 1 - (elapsed - fadeStart) / (duration - fadeStart));
+      if (scissors) {
+        const { x, y } = scissorsAt(elapsed, rect.width, rect.height, cutY);
+        scissorsRef.current?.place(x, y, openingAt(elapsed, snips));
+      }
       const wind = windAt(elapsed, windPhase);
 
       context.clearRect(0, 0, rect.width, rect.height);
@@ -228,7 +278,7 @@ export function HairBurst({ className, density = 10, onDone }: HairBurstProps) {
         context.restore();
       }
 
-      if (elapsed < DURATION_MS) {
+      if (elapsed < duration) {
         frame = requestAnimationFrame(draw);
         return;
       }
@@ -237,17 +287,21 @@ export function HairBurst({ className, density = 10, onDone }: HairBurstProps) {
     };
 
     frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
-  }, [density, reducedMotion]);
+    return () => {
+      cancelAnimationFrame(frame);
+      player?.stop();
+    };
+  }, [density, scissors, sound, cutY, reducedMotion]);
 
   if (reducedMotion) return null;
 
+  const canvas = <canvas ref={ref} aria-hidden data-slot="hair-burst" className={cn("pointer-events-none absolute inset-0 h-full w-full", className)} />;
+  if (!scissors) return canvas;
+  // Las tijeras van encima del pelo, en la misma capa (las clases de capa del canvas valen para las dos).
   return (
-    <canvas
-      ref={ref}
-      aria-hidden
-      data-slot="hair-burst"
-      className={cn("pointer-events-none absolute inset-0 h-full w-full", className)}
-    />
+    <>
+      {canvas}
+      <CuttingScissors ref={scissorsRef} className={className} />
+    </>
   );
 }

@@ -16,6 +16,7 @@ import { AppointmentCard } from "../flow/AppointmentCard";
 import { useBookingFlow } from "../flow/BookingContext";
 import { CancelDialog } from "../flow/CancelDialog";
 import { ManageSignIn } from "../flow/ManageSignIn";
+import { PayIdentity } from "../flow/PayIdentity";
 import { ReceiptView } from "../flow/ReceiptView";
 import { RescheduleDrawer } from "../flow/RescheduleDrawer";
 import { ReviewSheet } from "../flow/ReviewSheet";
@@ -36,7 +37,9 @@ const STATUS_VARIANT = { scheduled: "secondary", completed: "outline", cancelled
  */
 export function ManageStep() {
   const t = useAppT();
-  const { dispatch, shop, fmt, token, setToken } = useBookingFlow();
+  const { state, dispatch, shop, fmt, token: sessionToken, setToken } = useBookingFlow();
+  // Las citas solo con el código confirmado: la sesión de vista previa (reconocido por su celular) no alcanza.
+  const token = state.verified ? sessionToken : null;
   const [tab, setTab] = React.useState<ManageTab>("upcoming");
   const [moving, setMoving] = React.useState<BookedAppointment | null>(null);
   const [cancelling, setCancelling] = React.useState<BookedAppointment | null>(null);
@@ -48,7 +51,8 @@ export function ManageStep() {
   if (!token) {
     return (
       <StepLayout title={t("booking.manage.title")} lead={t("booking.manage.lead")}>
-        <ManageSignIn />
+        {/* Reconocido por su celular: el código va directo a ese número. Si no, el celular y luego el código. */}
+        {state.customer ? <PayIdentity /> : <ManageSignIn />}
       </StepLayout>
     );
   }

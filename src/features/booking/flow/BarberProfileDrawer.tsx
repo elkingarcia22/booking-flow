@@ -1,6 +1,7 @@
 import { useAppT } from "@/app/i18n";
 import * as React from "react";
 import { Chip } from "@/components/ai-interaction";
+import { Rating } from "@/components/forms";
 import { Heading, Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,6 @@ import { ThemaIcon } from "@/icons";
 import { initialsOf } from "../bookingFormat";
 import type { BookingBarber } from "../types";
 import { useBookingFlow } from "./BookingContext";
-import { BarberReviews } from "./BarberReviews";
 import { GalleryViewer } from "./GalleryViewer";
 import { PhotoStrip } from "./PhotoStrip";
 import { BookingOverlay } from "./BookingOverlay";
@@ -60,7 +60,7 @@ export function BarberAvatar({ barber }: { barber: BookingBarber }) {
 
 /**
  * Lo de adentro del perfil, sin la ventana: el cajón lo usa y también la lista
- * de barberos de la Agenda con selector, que lo abre sin salir de su modal.
+ * de barberos de la Agenda, que lo abre sin salir de su modal.
  */
 export function BarberProfileBody({ barber, serviceIds }: { barber: BookingBarber; serviceIds: readonly string[] }) {
   const t = useAppT();
@@ -75,12 +75,13 @@ export function BarberProfileBody({ barber, serviceIds }: { barber: BookingBarbe
         <section className="flex flex-col gap-1.5">
           <Heading level={6}>{t("booking.barber.about", { name: barber.name.split(" ")[0] ?? barber.name })}</Heading>
           <Text tone="secondary">{barber.description}</Text>
-          <Text size="sm" tone="muted" className="flex items-center gap-1">
-            <span className="text-warning" aria-hidden>
-              ★
-            </span>
-            <span className="tabular-nums">{barber.rating.toFixed(1)}</span>· {t("booking.barber.reviews", { count: barber.reviews })}
-          </Text>
+          {/* Solo la calificación: sin la lista de reseñas ni cuántas son. */}
+          <div className="flex items-center gap-2">
+            <Text size="lg" weight="semibold" tabular>
+              {barber.rating.toFixed(1)}
+            </Text>
+            <Rating value={Math.round(barber.rating * 2) / 2} allowHalf readOnly size="sm" aria-label={`${barber.rating.toFixed(1)} / 5`} />
+          </div>
         </section>
         {barber.skills.length > 0 && (
           <section className="flex flex-col gap-2">
@@ -92,7 +93,6 @@ export function BarberProfileBody({ barber, serviceIds }: { barber: BookingBarbe
             </div>
           </section>
         )}
-        <BarberReviews barberId={barber.id} rating={barber.rating} />
         {(barber.instagram || barber.facebook) && (
           <section className="flex flex-wrap gap-2" aria-label={t("booking.barber.social")}>
             {socials.map((social) => (

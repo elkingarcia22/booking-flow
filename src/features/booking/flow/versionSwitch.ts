@@ -1,7 +1,7 @@
 import * as React from "react";
 
 /**
- * Pasar a la Conversación desde otra experiencia (Paso a paso, Agenda con selector): quien prefiere
+ * Pasar a la Conversación desde otra experiencia (Paso a paso, Agenda): quien prefiere
  * escribir lo que quiere lo hace sin buscar otra página. `null` donde no se ofrece.
  */
 const SwitchToChatContext = React.createContext<(() => void) | null>(null);
@@ -12,7 +12,7 @@ export const useSwitchToChat = (): (() => void) | null => React.useContext(Switc
 
 /**
  * «Agenda con Clipper» desde otra experiencia: Clipper abre con la voz ya escuchando y saluda según de
- * dónde viene (Paso a paso pide quién eres; la Agenda con selector pregunta qué quieres hacer). La
+ * dónde viene (Paso a paso pide quién eres; la Agenda pregunta qué quieres hacer). La
  * experiencia se monta de nuevo al cambiar, así que el aviso se deja aquí y lo lee Clipper al abrir.
  */
 let voiceOnArrival: string | null = null;

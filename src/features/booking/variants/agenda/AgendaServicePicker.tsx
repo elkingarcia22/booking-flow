@@ -16,13 +16,13 @@ import { PICKER_SEARCH_FROM, PickerField, PickerOverlay, PickerRow, PickerSearch
 const NAMES_SHOWN = 2;
 
 /**
- * «Qué te vas a hacer» en la Agenda con selector: un campo que se lee como un
+ * «Qué te vas a hacer» en la Agenda: un campo que se lee como un
  * select —lo elegido, cuánto dura y desde cuánto— y que al tocarlo abre la
  * carta entera. Así la cabecera del tablero mide lo mismo con 3 servicios que
  * con 30, y las horas libres quedan a la vista. Se elige dentro y se aplica con
  * «Ver horas»; cerrar sin aplicar no cambia nada.
  */
-export function AgendaServiceField({ labelledBy, eyebrow, step, onNeedBranch }: { labelledBy: string; eyebrow?: string; step?: number; /** Sin sede no hay carta (es de cada sede): tocar el campo abre primero la sede. */ onNeedBranch?: () => void }) {
+export function AgendaServiceField({ labelledBy, eyebrow, onNeedBranch }: { labelledBy: string; eyebrow?: string; /** Sin sede no hay carta (es de cada sede): tocar el campo abre primero la sede. */ onNeedBranch?: () => void }) {
   const t = useAppT();
   const { state, dispatch, catalog, catalogLoading, fmt, touch } = useBookingFlow();
   const [open, setOpen] = React.useState(false);
@@ -55,9 +55,7 @@ export function AgendaServiceField({ labelledBy, eyebrow, step, onNeedBranch }: 
   return (
     <>
       <PickerField
-        asCard
         eyebrow={eyebrow}
-        step={step}
         // Sin sede no hay barberos ni carta: el campo espera apagado.
         disabled={!state.branchId}
         labelledBy={labelledBy}

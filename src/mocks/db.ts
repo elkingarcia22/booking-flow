@@ -12,6 +12,7 @@ import { seedExpenses, type MockExpense } from "./expenses/seed";
 import { seedSettings, type MockSettingsState } from "./settings/seed";
 import { emptyBooking, type MockBookingState } from "./booking/state";
 import { seedBlocks, seedClients, type MockAppointment, type MockClient, type MockSale, type MockTimeBlock, type MockWaitlistEntry } from "./calendar/seed";
+import { withBarberPrices } from "./team/pricing";
 import { LEVELS, seedOrders, seedOverrides, seedTeam, type MockBranchOrder, type MockLevel, type MockScheduleOverride, type MockTeamMember } from "./team/seed";
 
 export type MockUserStatus = "active" | "invited" | "inactive";
@@ -135,7 +136,7 @@ export interface MockTeamState {
 }
 
 const emptyTeam = (): MockTeamState => {
-  const members = seedTeam();
+  const members = withBarberPrices(seedTeam(), seedServices().items);
   return { members, levels: [...LEVELS], orders: seedOrders(members), overrides: seedOverrides() };
 };
 
@@ -177,7 +178,7 @@ export interface MockDb {
 
 const STORAGE_KEY = "thema.mock.db";
 /** Sube cuando cambia la semilla (equipo, catálogo…): lo guardado con otra versión se descarta. */
-const SCHEMA_VERSION = 24;
+const SCHEMA_VERSION = 25;
 
 interface PersistedDb {
   version?: number;

@@ -79,6 +79,13 @@ export function InputOtp({
   const cellRefs = React.useRef<(HTMLInputElement | null)[]>([])
   const separators = separatorsAfter(groups, length)
 
+  // El foco inicial, sin desplazar: dentro de una hoja que aún sube desde abajo, `autoFocus` hacía que
+  // el navegador moviera la pantalla de atrás para «mostrar» la casilla.
+  React.useEffect(() => {
+    if (autoFocus) cellRefs.current[0]?.focus({ preventScroll: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, [])
+
   const focusCell = (index: number) => {
     const target = cellRefs.current[Math.min(Math.max(index, 0), length - 1)]
     target?.focus()
@@ -163,7 +170,6 @@ export function InputOtp({
             type={mask ? "password" : "text"}
             inputMode={type === "numeric" ? "numeric" : "text"}
             autoComplete="one-time-code"
-            autoFocus={autoFocus && index === 0}
             disabled={disabled}
             maxLength={1}
             value={current[index] ?? ""}

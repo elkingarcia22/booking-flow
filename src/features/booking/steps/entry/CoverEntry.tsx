@@ -1,24 +1,23 @@
 import { useAppT } from "@/app/i18n";
 import { Heading, Text } from "@/components/typography";
-import { IconTile } from "@/components/utility/IconTile";
-import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { ShopBrand } from "../../flow/ShopBrand";
 import { STEP_WIDTH } from "../../flow/stepWidth";
 import { ChatTrigger } from "../../flow/ChatTrigger";
 import { EntryShortcuts } from "./EntryShortcuts";
+import { ShopBranchesCard } from "./ShopBranchesCard";
 import { PhoneEntryActions, PhoneEntryField } from "./PhoneEntryParts";
 import { usePhoneEntry } from "./usePhoneEntry";
 
 /**
  * Entrada «Portada»: la foto de la barbería arriba, como la vitrina, y encima una tarjeta con su
- * marca y el celular. Debajo, las sedes con su horario de hoy. Se siente como llegar al local.
+ * marca y el celular. Debajo, las sedes en una tarjeta (`ShopBranchesCard`) que abre su detalle. Se siente como llegar al local.
  */
-export function CoverEntry() {
+export function CoverEntry({ askProfile }: { askProfile: boolean }) {
   const t = useAppT();
-  const { shop, fmt, layout, touch } = useBookingFlow();
-  const entry = usePhoneEntry();
+  const { shop, layout, touch } = useBookingFlow();
+  const entry = usePhoneEntry({ askProfile });
   const cover = shop.coverUrl ?? shop.branches.find((branch) => branch.imageUrl)?.imageUrl ?? null;
   const isWide = layout === "wide";
 
@@ -58,29 +57,7 @@ export function CoverEntry() {
 
         <EntryShortcuts />
 
-        <section aria-labelledby="cover-branches" className="flex flex-col gap-3">
-          <Text id="cover-branches" size="xs" weight="semibold" tone="muted" className="uppercase tracking-wide">
-            {t("booking.entry.branches")}
-          </Text>
-          <ul className={cn("grid gap-2", shop.branches.length > 1 && isWide ? "grid-cols-2" : "grid-cols-1")}>
-            {shop.branches.map((branch) => (
-              <li key={branch.id} className="flex items-center gap-3 rounded-2xl border border-border p-2.5">
-                <IconTile size="lg" src={branch.imageUrl ?? undefined} icon={<ThemaIcon name="building" />} />
-                <div className="flex min-w-0 flex-col">
-                  <Text size="sm" weight="medium" truncate>
-                    {branch.name}
-                  </Text>
-                  <Text size="xs" tone="muted" truncate>
-                    {branch.address}
-                  </Text>
-                  <Text size="xs" tone="secondary" tabular>
-                    {fmt.clock(branch.opensAt)} – {fmt.clock(branch.closesAt)}
-                  </Text>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <ShopBranchesCard />
 
       </div>
 

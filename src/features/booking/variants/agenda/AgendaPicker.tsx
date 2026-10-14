@@ -10,23 +10,14 @@ import { useBookingFlow } from "../../flow/BookingContext";
 import { BookingOverlay } from "../../flow/BookingOverlay";
 import { overlayKind } from "../../flow/drawerFit";
 
-/**
- * La Agenda en lista: la misma agenda, pero las preguntas van en filas (también en tablet y monitor) y,
- * fuera del celular, cada lista se abre ahí mismo debajo de su fila en vez de en una hoja o un modal.
- */
-const AgendaListModeContext = React.createContext(false);
-export const AgendaListModeProvider = AgendaListModeContext.Provider;
-export const useAgendaListMode = () => React.useContext(AgendaListModeContext);
-
-/** ¿Las listas se abren en su sitio? En la Agenda en lista, fuera del celular y el widget. */
+/** ¿Las listas se abren en su sitio? Fuera del celular y el widget: debajo de su fila, en vez de en una hoja o un modal. */
 export function useInlineLists(): boolean {
-  const listMode = useAgendaListMode();
   const { layout, touch } = useBookingFlow();
-  return listMode && (layout === "wide" || touch === "lg");
+  return layout === "wide" || touch === "lg";
 }
 
 /**
- * Las dos piezas de la Agenda con selector: un campo que se lee como un select
+ * Las dos piezas de la Agenda: un campo que se lee como un select
  * (foto, lo elegido y un detalle) y la ventana que abre la lista. La sede y los
  * servicios las comparten para verse y comportarse igual.
  */
@@ -45,27 +36,12 @@ interface PickerFieldProps {
   open: boolean;
   onOpen: () => void;
   testId?: string;
-  /** Tarjeta (los campos de sede, servicio y barbero van en fila); si no, fila de siempre. */
-  asCard?: boolean;
   /** El nombre del campo dentro de la fila («Sede»), cuando no lleva título encima (celular). */
   eyebrow?: string;
   /** Aún no se puede responder (falta la sede): apagado y sin abrir. */
   disabled?: boolean;
   /** Ya respondida: borde y fondo de marca para distinguirla de las que faltan. Por defecto, si tiene `value`. */
   selected?: boolean;
-  /** El número de la pregunta en «Arma tu cita» (1 sede, 2 servicios…), delante del `eyebrow`. */
-  step?: number;
-}
-
-/** El número de una pregunta de «Arma tu cita»: círculo lleno del color de marca, bien visible en claro y en oscuro. */
-export function StepNumber({ value, className }: { value: number; className?: string }) {
-  return (
-    <span aria-hidden className={cn("flex size-5 shrink-0 items-center justify-center rounded-full bg-primary [&>span]:text-primary-foreground", className)}>
-      <Text as="span" size="xs" weight="semibold" tabular>
-        {value}
-      </Text>
-    </span>
-  );
 }
 
 /** El nombre del campo, encima de lo elegido. */
@@ -77,13 +53,10 @@ function Eyebrow({ text }: { text: string }) {
   );
 }
 
-export function PickerField({ labelledBy, imageUrl, icon, round = false, value, detail, placeholder, open, onOpen, testId, asCard = false, eyebrow, step, selected = Boolean(value), disabled = false }: PickerFieldProps) {
+export function PickerField({ labelledBy, imageUrl, icon, round = false, value, detail, placeholder, open, onOpen, testId, eyebrow, selected = Boolean(value), disabled = false }: PickerFieldProps) {
   const { touch, layout } = useBookingFlow();
-  const listMode = useAgendaListMode();
   const inline = useInlineLists();
   const valueId = React.useId();
-  // Tarjeta solo donde caben en fila (tablet y monitor); en celular y en la Agenda en lista, la fila de siempre.
-  const isDense = asCard && !listMode && (layout === "wide" || touch === "lg");
   // En monitor la lista abre en un modal: la flecha apunta a la derecha; donde sube desde abajo, hacia abajo.
   const opensAside = !inline && overlayKind({ layout, touch }) === "modal";
   const arrow = opensAside ? (
@@ -102,38 +75,6 @@ export function PickerField({ labelledBy, imageUrl, icon, round = false, value, 
     selected && !disabled ? "border-primary/60 bg-[linear-gradient(hsl(var(--primary)/0.06),hsl(var(--primary)/0.06))]" : "border-input"
   );
 
-  // Como tarjetas, una al lado de la otra. Dos franjas que se alinean entre las tres: arriba el número y el
-  // nombre de la pregunta («1 · SEDE») con la flecha; debajo, el icono o la foto junto a lo elegido.
-  if (isDense) {
-    return (
-      <button type="button" aria-haspopup="dialog" aria-expanded={open} aria-labelledby={`${labelledBy} ${valueId}`} disabled={disabled} onClick={onOpen} data-testid={testId} className={cn(base, "flex h-full flex-col", layout === "wide" ? "gap-3 p-4" : "gap-2.5 p-3")}>
-        <span className="flex w-full items-center gap-2">
-          {step !== undefined && <StepNumber value={step} className="size-6" />}
-          {eyebrow && (
-            <Text as="span" size="xs" weight="semibold" tone="muted" className="truncate uppercase tracking-wide">
-              {eyebrow}
-            </Text>
-          )}
-          <span className="ml-auto">{arrow}</span>
-        </span>
-        <span className="flex w-full min-w-0 items-center gap-3">
-          <IconTile size={layout === "wide" ? "md" : "sm"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} tone={value ? "primary" : "neutral"} />
-          <span id={valueId} className="flex min-w-0 flex-1 flex-col">
-            {/* En tarjetas angostas, las palabras largas («Massachusetts») parten en vez de cortarse. */}
-            <Text as="span" size="sm" weight={value ? "semibold" : "medium"} tone={value ? "default" : "muted"} className="line-clamp-2 hyphens-auto [overflow-wrap:anywhere]" lang="es">
-              {value ?? placeholder}
-            </Text>
-            {value && detail && (
-              <Text as="span" size="xs" tone="muted" tabular className="line-clamp-1 [overflow-wrap:anywhere]">
-                {detail}
-              </Text>
-            )}
-          </span>
-        </span>
-      </button>
-    );
-  }
-
   return (
     <button
       type="button"
@@ -145,7 +86,6 @@ export function PickerField({ labelledBy, imageUrl, icon, round = false, value, 
       data-testid={testId}
       className={cn(base, "flex items-center gap-3 px-3", touch === "lg" ? "min-h-[4.5rem] py-3" : "min-h-16 py-2.5")}
     >
-      {step !== undefined && <StepNumber value={step} className="size-6" />}
       <IconTile size={touch === "lg" ? "lg" : "md"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} tone={value ? "primary" : "neutral"} />
       <span id={valueId} className="flex min-w-0 flex-1 flex-col">
         {eyebrow && <Eyebrow text={eyebrow} />}
@@ -275,7 +215,7 @@ export function PickerOverlay({ open, onOpenChange, title, description, footer, 
   );
 }
 
-/** La lista abierta en su sitio (Agenda en lista, fuera del celular): se asoma a la vista y pone el foco en lo elegido. */
+/** La lista abierta en su sitio (fuera del celular): se asoma a la vista y pone el foco en lo elegido. */
 function InlinePanel({ title, description, heading, footer, onClose, onShown, children }: { title: string; description?: string; heading: React.ReactNode; footer?: React.ReactNode; onClose: () => void; onShown: () => void; children: React.ReactNode }) {
   const t = useAppT();
   const ref = React.useRef<HTMLElement>(null);

@@ -27,6 +27,11 @@ export interface DraftItem {
   barberChosen?: boolean;
   /** «AAAA-MM-DDTHH:mm», o nada mientras no se elige. */
   start: string | null;
+  /**
+   * Sin preferencia: quién la hará según la agenda (el primero libre a esa hora, como asigna la
+   * barbería). Solo para cobrar lo que cobra esa persona; al reservar se sigue enviando sin preferencia.
+   */
+  assignedBarberId?: string | null;
 }
 
 /** Una entrada de la lista de espera: lo que devolvió el servidor y lo que se pidió. */
@@ -48,6 +53,17 @@ export interface BookingState {
    */
   token: string | null;
   customer: BookingCustomer | null;
+  /**
+   * Confirmó con el código que el celular es suyo. El cliente de siempre se reconoce solo con el
+   * número (`customerPreview`): ve su bienvenida, pero pagar, la lista de espera, «Mis citas», los
+   * paquetes y las tarjetas de regalo piden el código.
+   */
+  verified: boolean;
+  /**
+   * Los datos de «Conozcámonos» del cliente nuevo, escritos sin código: su ficha se crea sola al
+   * confirmar el código (al pagar, en la lista de espera o en «Mis citas»), sin volver a pedirlos.
+   */
+  pendingProfile: PendingProfile | null;
   branchId: string | null;
   items: DraftItem[];
   /** La cita que se está armando; `editingIndex` dice si reemplaza una del carrito. */
@@ -79,8 +95,26 @@ export interface BookingState {
   waitlist: readonly WaitlistEntry[];
 }
 
+export interface PendingProfile {
+  firstName: string;
+  lastName: string;
+  email: string;
+  marketing: boolean;
+}
+
 export type BookingAction =
   | { type: "phoneEntered"; phone: string }
+  /**
+   * El celular de un cliente nuevo, sin código: «Conozcámonos» y a armar la cita; el código se pide al
+   * pagar (`PaymentStep`), en la lista de espera o en «Mis citas».
+   */
+  | { type: "startWithPhone"; phone: string; askProfile: boolean; onlyBranchId: string | null }
+  /** El cliente de siempre, reconocido por su celular sin código: su bienvenida, con una sesión de vista previa. */
+  | { type: "customerPreview"; phone: string; customer: BookingCustomer; token: string }
+  /** «Conozcámonos» sin código: se guardan sus datos y sigue a armar la cita. */
+  | { type: "profileDrafted"; profile: PendingProfile; onlyBranchId: string | null }
+  /** Verificó el código siendo nuevo, sin moverse de pantalla (en el pago): falta su ficha. */
+  | { type: "verifiedNew"; token: string }
   | { type: "codeSent"; phone: string; sentTo: string; channel: "whatsapp" | "sms" }
   | { type: "setToken"; token: string | null }
   | { type: "customerFound"; customer: BookingCustomer; token: string }
@@ -96,7 +130,7 @@ export type BookingAction =
   | { type: "setItemPerson"; key: string; person: BookingPerson }
   | { type: "toggleService"; serviceId: string }
   | { type: "chooseBarber"; barberId: string | null }
-  | { type: "chooseTime"; start: string }
+  | { type: "chooseTime"; start: string; /** Sin preferencia: el primero libre a esa hora. */ assignedBarberId?: string | null }
   | { type: "addAnother"; person: BookingPerson }
   /**
    * Abre una cita en borrador sin moverse de paso: la usan las versiones que no
@@ -142,7 +176,7 @@ const nextKey = (): string => {
 const emptyDraft = (person: BookingPerson = { kind: "self" }): DraftItem => ({ key: nextKey(), person, serviceIds: [], barberId: null, start: null });
 
 export function initialBookingState(defaultTipId: string | null = null): BookingState {
-  return { step: "phone", phone: "", codeSentTo: null, token: null, customer: null, branchId: null, items: [], draft: null, editingIndex: null, fromReview: false, products: {}, tipId: defaultTipId, promo: null, gift: null, useReward: true, usePackages: true, method: null, notes: "", referencePhotos: [], reservation: null, payCard: null, waitlist: [] };
+  return { step: "phone", phone: "", codeSentTo: null, token: null, customer: null, verified: false, pendingProfile: null, branchId: null, items: [], draft: null, editingIndex: null, fromReview: false, products: {}, tipId: defaultTipId, promo: null, gift: null, useReward: true, usePackages: true, method: null, notes: "", referencePhotos: [], reservation: null, payCard: null, waitlist: [] };
 }
 
 /** Con una sola sede se salta el paso: se elige sola. */
@@ -159,16 +193,28 @@ export function bookingReducer(state: BookingState, action: BookingAction): Book
   switch (action.type) {
     case "phoneEntered":
       return { ...state, phone: action.phone };
+    case "startWithPhone":
+      // En Paso a paso el nuevo empieza por «Conozcámonos» (sin código); en la Agenda va directo a la cita
+      // y sus datos se piden con el código.
+      return action.askProfile
+        ? { ...state, phone: action.phone, codeSentTo: null, token: null, customer: null, verified: false, pendingProfile: null, step: "profile" }
+        : afterIdentity({ ...state, phone: action.phone, codeSentTo: null, token: null, customer: null, verified: false, pendingProfile: null }, action.onlyBranchId);
+    case "profileDrafted":
+      return afterIdentity({ ...state, pendingProfile: action.profile }, action.onlyBranchId);
+    case "customerPreview":
+      return { ...state, phone: action.phone, customer: action.customer, token: action.token, verified: false, codeSentTo: null, step: "welcome" };
+    case "verifiedNew":
+      return { ...state, customer: null, token: action.token, verified: true, codeSentTo: null };
     case "codeSent":
       return { ...state, phone: action.phone, codeSentTo: { sentTo: action.sentTo, channel: action.channel }, step: "verify" };
     case "setToken":
       return { ...state, token: action.token };
     case "customerFound":
-      return { ...state, customer: action.customer, token: action.token, codeSentTo: null, step: "welcome" };
+      return { ...state, customer: action.customer, token: action.token, verified: true, codeSentTo: null, step: "welcome" };
     case "customerIsNew":
-      return { ...state, customer: null, token: action.token, codeSentTo: null, step: "profile" };
+      return { ...state, customer: null, token: action.token, verified: true, codeSentTo: null, step: "profile" };
     case "customerBlocked":
-      return { ...state, customer: null, token: null, codeSentTo: null, step: "blocked" };
+      return { ...state, customer: null, token: null, verified: false, codeSentTo: null, step: "blocked" };
     case "profileSaved":
       return afterIdentity({ ...state, customer: action.customer }, action.onlyBranchId);
     case "startFresh":
@@ -203,12 +249,12 @@ export function bookingReducer(state: BookingState, action: BookingAction): Book
       const has = state.draft.serviceIds.includes(action.serviceId);
       const serviceIds = has ? state.draft.serviceIds.filter((id) => id !== action.serviceId) : [...state.draft.serviceIds, action.serviceId];
       // Otros servicios pueden no hacerlos el mismo barbero ni caber en la misma hora: se vuelven a elegir.
-      return { ...state, draft: { ...state.draft, serviceIds, start: null } };
+      return { ...state, draft: { ...state.draft, serviceIds, start: null, assignedBarberId: null } };
     }
     case "chooseBarber":
-      return state.draft ? { ...state, draft: { ...state.draft, barberId: action.barberId, barberChosen: true, start: null }, step: "time" } : state;
+      return state.draft ? { ...state, draft: { ...state.draft, barberId: action.barberId, barberChosen: true, start: null, assignedBarberId: null }, step: "time" } : state;
     case "chooseTime":
-      return state.draft ? commitDraft(state, { ...state.draft, start: action.start }) : state;
+      return state.draft ? commitDraft(state, { ...state.draft, start: action.start, assignedBarberId: state.draft.barberId ? null : (action.assignedBarberId ?? null) }) : state;
     case "addAnother":
       return { ...state, draft: emptyDraft(action.person), editingIndex: null, fromReview: state.items.length > 0, step: "services" };
     case "openDraft":
@@ -262,16 +308,16 @@ export function bookingReducer(state: BookingState, action: BookingAction): Book
       return { ...state, reservation: action.reservation, step: "confirmed" };
     case "bookAgain":
       // Otra reserva para la misma persona: se queda quién es y en qué sede, lo demás vuelve a empezar.
-      return { ...initialBookingState(state.tipId), phone: state.phone, token: state.token, customer: state.customer, branchId: state.branchId, draft: emptyDraft(), step: state.branchId ? "services" : "branch" };
+      return { ...initialBookingState(state.tipId), phone: state.phone, token: state.token, customer: state.customer, verified: state.verified, branchId: state.branchId, draft: emptyDraft(), step: state.branchId ? "services" : "branch" };
     case "openManage":
       return { ...state, step: "manage" };
     case "signedIn":
       // Entró a «Mis citas» con su código: ya se sabe quién es, sin moverlo de pantalla.
-      return { ...state, customer: action.customer, token: action.token, phone: action.customer.phone.replace(/[^\d+]/g, "") || state.phone };
+      return { ...state, customer: action.customer, token: action.token, verified: true, phone: action.customer.phone.replace(/[^\d+]/g, "") || state.phone };
     case "customerUpdated":
-      return { ...state, customer: action.customer };
+      return { ...state, customer: action.customer, pendingProfile: null };
     case "signOut":
-      return { ...state, phone: "", codeSentTo: null, token: null, customer: null, method: null, useReward: true, usePackages: true };
+      return { ...state, phone: "", codeSentTo: null, token: null, customer: null, verified: false, pendingProfile: null, method: null, useReward: true, usePackages: true };
     case "waitlistJoined":
       // Apuntarse va directo a su confirmación: desde allí se sale de la lista, se buscan otras horas o,
       // si ya había una reserva armada, se vuelve a ella para pagarla.

@@ -195,6 +195,15 @@ export const visitSuggestionSchema = z.object({
 export type VisitSuggestion = z.infer<typeof visitSuggestionSchema>;
 export const suggestionResponseSchema = z.object({ suggestion: visitSuggestionSchema.nullable() });
 
+/**
+ * Si el celular ya es de un cliente. Al de siempre se le reconoce sin código para su bienvenida: llega
+ * su perfil sin lo sensible (sin correo, tarjetas, saldo, paquetes ni membresía) y una sesión de vista
+ * previa que solo sirve para su propuesta de visita. Pagar, la lista de espera y «Mis citas» piden el
+ * código. Un número bloqueado responde `returning` sin perfil: lo sabe tras el código.
+ */
+export const phoneCheckSchema = z.object({ returning: z.boolean(), token: z.string().nullable().default(null), customer: bookingCustomerSchema.nullable().default(null) });
+export type PhoneCheck = z.infer<typeof phoneCheckSchema>;
+
 /** El código se manda a cualquier número: la respuesta no dice si es cliente. */
 export const otpSentSchema = z.object({ sentTo: z.string(), channel: z.enum(["whatsapp", "sms"]) });
 export type OtpSent = z.infer<typeof otpSentSchema>;

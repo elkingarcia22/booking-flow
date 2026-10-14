@@ -2,7 +2,6 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
@@ -18,18 +17,17 @@ interface AgendaHeaderProps {
 }
 
 /**
- * La cabecera de la agenda: la barbería y su sede, entrar como cliente (no hace
- * falta para mirar horas), «Mis citas» y lo que se compra aparte (regalos y
- * paquetes). No cuenta pasos: aquí no hay pasos.
+ * La cabecera de la agenda: la barbería, «Agenda con Clipper», entrar como
+ * cliente (no hace falta para mirar horas) y «Mis citas». Sin menú de «más
+ * opciones» (regalos y paquetes): arriba solo queda lo de agendar. No cuenta
+ * pasos: aquí no hay pasos.
  */
 export function AgendaHeader({ onBack, onSignIn, trailing, showChat = false }: AgendaHeaderProps) {
   const t = useAppT();
   const { shop, state, dispatch, layout, touch } = useBookingFlow();
   const isWide = layout === "wide";
-  const extras = [
-    ...(shop.payment.card ? [{ id: "gift" as const, label: t("booking.gift.cta") }] : []),
-    ...(shop.packages.length > 0 ? [{ id: "packages" as const, label: t("booking.packages.cta") }] : []),
-  ];
+  // «Mis citas» solo con texto (monitor); el botón de solo icono no va.
+  const showMyAppointments = state.step !== "manage" && isWide;
 
   return (
     <header className="relative z-sticky shrink-0 border-b border-border bg-surface/90 backdrop-blur">
@@ -45,42 +43,25 @@ export function AgendaHeader({ onBack, onSignIn, trailing, showChat = false }: A
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {showChat && <ChatTrigger full />}
-          {/* Sin entrar, «Entrar»; ya dentro, en su lugar «Mis citas». */}
+          {/* Ya dentro, «Mis citas». «Entrar» solo si aún no dio su celular: la portada ya lo pide y el código va al pagar. */}
           {state.customer ? (
             <>
               <Text size="sm" weight="medium" className={cn("px-2", !isWide && "sr-only")}>
                 {t("booking.agenda.signedAs", { name: state.customer.firstName })}
               </Text>
-              {state.step !== "manage" && (
+              {showMyAppointments && (
                 <Button type="button" variant="outline" size={isWide ? "sm" : "icon-sm"} onClick={() => dispatch({ type: "openManage" })} aria-label={t("booking.header.myAppointments")}>
                   <ThemaIcon name="calendar" />
                   {isWide && t("booking.header.myAppointments")}
                 </Button>
               )}
             </>
-          ) : (
+          ) : !state.phone ? (
             <Button type="button" variant="outline" size="sm" onClick={onSignIn}>
               <ThemaIcon name="login" />
               {isWide ? t("booking.agenda.signIn") : t("booking.agenda.signInShort")}
             </Button>
-          )}
-          {state.customer && extras.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={t("booking.agenda.more")}>
-                  <ThemaIcon name="more" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {extras.map((item) => (
-                  <DropdownMenuItem key={item.id} onSelect={() => dispatch({ type: "goTo", step: item.id })} className="gap-2">
-                    <ThemaIcon name="ticket" size="xs" />
-                    {item.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          ) : null}
           {trailing}
         </div>
       </div>

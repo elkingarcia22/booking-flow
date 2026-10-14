@@ -13,7 +13,7 @@ import { describeError, isApiError } from "@/lib/api";
 import { formatPhone } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { toastMissing } from "../../flow/missingData";
-import { useCreateCustomerMutation, useRequestCodeMutation, useVerifyCodeMutation } from "../../queries";
+import { useCreateCustomerMutation, useRecentCode, useRequestCodeMutation, useVerifyCodeMutation } from "../../queries";
 
 const MIN_DIGITS = 10;
 const CODE_LENGTH = 6;
@@ -51,6 +51,45 @@ function PhoneForm() {
         {t("booking.agenda.id.sendCode")}
       </Button>
     </form>
+  );
+}
+
+/**
+ * El celular ya se dio (en la portada, o el cliente de siempre reconocido por él): el código se manda
+ * solo a ese número, sin volver a pedirlo. «Cambiar número» en el paso del código lo deja escribir otro.
+ */
+function SendToKnownPhone() {
+  const t = useAppT();
+  const { state, dispatch } = useBookingFlow();
+  const request = useRequestCodeMutation();
+  const recentCode = useRecentCode();
+  const sent = React.useRef(false);
+  React.useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
+    // Si ya se le mandó uno hace poco, sirve el mismo: no se pide otro solo por abrir esta hoja.
+    const recent = recentCode(state.phone);
+    if (recent) return dispatch({ type: "codeSent", phone: state.phone, sentTo: recent.sentTo, channel: recent.channel });
+    request.mutate(state.phone, { onSuccess: (next) => dispatch({ type: "codeSent", phone: state.phone, sentTo: next.sentTo, channel: next.channel }) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez, al abrir
+  }, []);
+  if (request.isError) {
+    return (
+      <div className="flex flex-col gap-3">
+        <Text size="sm" tone="negative" role="alert">
+          {describeError(request.error).description}
+        </Text>
+        <Button type="button" variant="link" size="sm" className="self-start px-0" onClick={() => dispatch({ type: "signOut" })}>
+          {t("booking.verify.changePhone")}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <Text size="sm" tone="muted" className="flex items-center gap-2">
+      <Spinner size="sm" />
+      {t("booking.payIdentity.sending", { phone: formatPhone(state.phone) })}
+    </Text>
   );
 }
 
@@ -111,8 +150,18 @@ export function ProfileForm() {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
   const create = useCreateCustomerMutation(state.token);
-  const [values, setValues] = React.useState({ firstName: "", lastName: "", email: "", marketing: false });
+  const [values, setValues] = React.useState(() => state.pendingProfile ?? { firstName: "", lastName: "", email: "", marketing: false });
   const [touched, setTouched] = React.useState(false);
+  // Ya los escribió en «Conozcámonos» (sin código): al confirmar el código la ficha se crea sola. Si falla
+  // (un correo ya usado, p. ej.), queda el formulario con sus datos y el error a la vista.
+  const pending = state.pendingProfile;
+  const autoCreated = React.useRef(false);
+  React.useEffect(() => {
+    if (!pending || autoCreated.current) return;
+    autoCreated.current = true;
+    create.mutate(pending, { onSuccess: (customer) => dispatch({ type: "customerUpdated", customer }) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez, al confirmar el código
+  }, []);
   const serverFields = isApiError(create.error) ? create.error.fieldErrors : undefined;
   const errors = {
     firstName: values.firstName.trim().length < MIN_NAME ? t("booking.profile.firstNameError") : serverFields?.firstName?.[0],
@@ -128,6 +177,15 @@ export function ProfileForm() {
     // El perfil se guarda sin moverse de la agenda: lo armado sigue en su sitio.
     create.mutate({ firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing }, { onSuccess: (customer) => dispatch({ type: "customerUpdated", customer }) });
   };
+
+  if (pending && !create.isError) {
+    return (
+      <Text size="sm" tone="muted" className="flex items-center gap-2" aria-live="polite">
+        <Spinner size="sm" />
+        {t("booking.payIdentity.saving")}
+      </Text>
+    );
+  }
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
@@ -165,8 +223,8 @@ export function ProfileForm() {
 }
 
 /**
- * Quién reserva, preguntado al final y en el mismo sitio: el celular, el código
- * y —si es la primera vez— nombre y correo. No cambia de pantalla ni toca lo
+ * Quién reserva, preguntado al final y en el mismo sitio: el celular (si aún no
+ * lo dio), el código y —si es la primera vez— nombre y correo. No cambia de pantalla ni toca lo
  * que ya se apartó en la agenda.
  */
 export function AgendaIdentity() {
@@ -204,8 +262,9 @@ export function AgendaIdentity() {
       </Alert>
     );
   }
-  if (state.customer) return null;
-  if (state.token) return <ProfileForm />;
+  if (state.customer && state.verified) return null;
+  if (state.verified) return <ProfileForm />;
   if (state.codeSentTo) return <CodeForm onBlocked={() => setBlocked(true)} />;
-  return <PhoneForm />;
+  // Con el celular ya dado, directo al código; si no, primero el celular.
+  return state.phone ? <SendToKnownPhone /> : <PhoneForm />;
 }

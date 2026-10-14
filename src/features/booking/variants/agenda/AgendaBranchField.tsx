@@ -9,7 +9,7 @@ import { BranchProfileBody } from "../../flow/BranchProfileSheet";
 import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
 
 /**
- * La sede en la Agenda con selector: el mismo campo que los servicios (foto del
+ * La sede en la Agenda: el mismo campo que los servicios (foto del
  * local, nombre y dirección) y la lista de sedes en la misma ventana. Tocar una
  * sede la elige y cierra; «Ver detalle» abre su perfil sin salir de la ventana
  * (con «Volver» a la lista). Con citas ya apartadas cambiar vacía la reserva
@@ -17,7 +17,7 @@ import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
  * confirmarlo antes. Sin sede elegida (sin cuenta) el campo va vacío; la
  * apertura se puede llevar desde fuera para que Servicios o Barbero la pidan.
  */
-export function AgendaBranchField({ labelledBy, eyebrow, step, open: openProp, onOpenChange }: { labelledBy: string; eyebrow?: string; step?: number; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+export function AgendaBranchField({ labelledBy, eyebrow, open: openProp, onOpenChange }: { labelledBy: string; eyebrow?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const t = useAppT();
   const { shop, state, dispatch, fmt } = useBookingFlow();
   const [openState, setOpenState] = React.useState(false);
@@ -79,9 +79,7 @@ export function AgendaBranchField({ labelledBy, eyebrow, step, open: openProp, o
   return (
     <>
       <PickerField
-        asCard
         eyebrow={eyebrow}
-        step={step}
         labelledBy={labelledBy}
         imageUrl={current?.imageUrl}
         icon="building"

@@ -24,14 +24,13 @@ interface BookingHeaderProps {
 }
 
 /**
- * La cabecera de la reserva: quién es la barbería (y en qué sede), volver y
+ * La cabecera de la reserva: quién es la barbería (solo la marca, sin la sede), volver y
  * cuánto falta. El progreso solo aparece mientras se arma la cita: una línea
  * con «Paso X de Y», igual en celular, tablet y monitor.
  */
 export function BookingHeader({ onBack, trailing }: BookingHeaderProps) {
   const t = useAppT();
   const { shop, state, dispatch, layout } = useBookingFlow();
-  const branch = shop.branches.find((item) => item.id === state.branchId);
   const flow = progressSteps(defaultBranchId(state.customer, shop.branches.map((item) => item.id)) === null);
   const index = progressIndex(state.step, flow);
   const showProgress = index >= 0 && index < flow.length;
@@ -49,10 +48,11 @@ export function BookingHeader({ onBack, trailing }: BookingHeaderProps) {
   );
   const end = (
     <div className="flex shrink-0 items-center justify-end gap-1">
-      {state.customer && state.step !== "manage" && state.step !== "confirmed" && (
-        <Button type="button" variant="ghost" size={isWide ? "sm" : "icon-sm"} onClick={() => dispatch({ type: "openManage" })} aria-label={t("booking.header.myAppointments")}>
+      {/* «Mis citas» solo en monitor, con texto; en celular y tablet se llega desde la bienvenida. */}
+      {isWide && state.customer && state.step !== "manage" && state.step !== "confirmed" && (
+        <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "openManage" })}>
           <ThemaIcon name="calendar" />
-          {isWide && t("booking.header.myAppointments")}
+          {t("booking.header.myAppointments")}
         </Button>
       )}
       {trailing}
@@ -75,7 +75,7 @@ export function BookingHeader({ onBack, trailing }: BookingHeaderProps) {
       <header className="relative z-sticky shrink-0 border-b border-border bg-surface/90 backdrop-blur">
         <div className="flex h-[4.5rem] items-center gap-6 px-6">
           {back}
-          <ShopBrand shop={shop} tagline={branch?.name} className="shrink-0" />
+          <ShopBrand shop={shop} className="shrink-0" />
           {progress || <div className="flex-1" />}
           {end}
         </div>
@@ -88,7 +88,7 @@ export function BookingHeader({ onBack, trailing }: BookingHeaderProps) {
       <div className="flex h-14 items-center gap-2 px-3">
         {back}
         <div className="flex min-w-0 flex-1 items-center justify-center">
-          <ShopBrand shop={shop} tagline={branch?.name} />
+          <ShopBrand shop={shop} />
         </div>
         {end}
       </div>

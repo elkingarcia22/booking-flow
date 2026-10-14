@@ -97,11 +97,13 @@ export interface IntentsKit {
   resume: () => void;
   /** Vuelve a la pregunta anterior de la reserva; `false` si no hay a dónde volver. */
   back: () => boolean;
+  /** Ya se está armando una cita (sabe quién es, o dio su celular): se puede cambiar lo elegido. */
+  canBook: () => boolean;
 }
 
 /** Las respuestas «de pasada»: cambian lo pedido o responden y retoman. */
 export function useChatIntents(kit: IntentsKit) {
-  const { t, fmt, shop, apply, say, stateRef, catalogRef, totalsRef, serviceNames, barberName, askServices, askBarber, askDay, askBranch, showBarber, showBranch, call, info, manage, resume, back } = kit;
+  const { t, fmt, shop, apply, say, stateRef, catalogRef, totalsRef, serviceNames, barberName, askServices, askBarber, askDay, askBranch, showBarber, showBranch, call, info, manage, resume, back, canBook } = kit;
 
   /** Para cambiar algo de una cita ya apartada sin borrador abierto: se abre la última para cambiarla. */
   const reopenLast = (): boolean => {
@@ -158,6 +160,7 @@ export function useChatIntents(kit: IntentsKit) {
   const handleAside = async (aside: ChatAside): Promise<boolean> => {
     const current = stateRef.current;
     const signedIn = Boolean(current.customer);
+    const booking = canBook();
     switch (aside.kind) {
       case "back":
         if (back()) return true;
@@ -165,7 +168,7 @@ export function useChatIntents(kit: IntentsKit) {
         resume();
         return true;
       case "changeBarber":
-        if (!signedIn) return false;
+        if (!booking) return false;
         if (!reopenLast() || !stateRef.current.draft?.serviceIds.length) {
           await askServices(t("booking.chat.asideServicesFirst"));
           return true;
@@ -173,12 +176,12 @@ export function useChatIntents(kit: IntentsKit) {
         askBarber(t("booking.chat.asideChangeBarber"));
         return true;
       case "changeServices":
-        if (!signedIn) return false;
+        if (!booking) return false;
         reopenLast();
         await askServices(t("booking.chat.asideChangeServices"));
         return true;
       case "changeTime":
-        if (!signedIn) return false;
+        if (!booking) return false;
         if (!reopenLast() || !stateRef.current.draft?.serviceIds.length) {
           await askServices(t("booking.chat.asideServicesFirst"));
           return true;

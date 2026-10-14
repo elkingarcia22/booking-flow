@@ -17,6 +17,7 @@ import {
   cancelResultSchema,
   myAppointmentsSchema,
   otpSentSchema,
+  phoneCheckSchema,
   otpVerifySchema,
   receiptSentSchema,
   repeatResultSchema,
@@ -42,6 +43,7 @@ import {
   type MyAppointments,
   type NewCustomerInput,
   type OtpSent,
+  type PhoneCheck,
   type OtpVerify,
   type ReceiptSent,
   type RepeatResult,
@@ -90,6 +92,7 @@ export const bookingApi = {
   checkPromo: (token: string | null, input: { code: string; appointments: number }) =>
     api.post<Promo>("/booking/promo", input, { headers: token ? session(token) : undefined, schema: promoSchema }),
   reserve: (token: string, input: ReservationInput) => api.post<Reservation>("/booking/reservations", input, { headers: session(token), schema: reservationSchema, timeoutMs: 30_000 }),
+  checkPhone: (phone: string) => api.post<PhoneCheck>("/booking/phone/check", { phone }, { schema: phoneCheckSchema }),
   requestOtp: (phone: string) => api.post<OtpSent>("/booking/otp/request", { phone }, { schema: otpSentSchema }),
   verifyOtp: (phone: string, code: string) => api.post<OtpVerify>("/booking/otp/verify", { phone, code }, { schema: otpVerifySchema }),
   myAppointments: (token: string, signal?: AbortSignal) => api.get<MyAppointments>("/booking/me/appointments", { headers: session(token), schema: myAppointmentsSchema, signal }),

@@ -10,17 +10,21 @@ import { AsideSlotProvider } from "../../flow/asideSlot";
 import { BookingSummaryAside } from "../../flow/BookingSummaryAside";
 import { BookingSheet } from "../../flow/BookingSheet";
 import { HIDE_SCROLLBAR } from "../../flow/drawerFit";
+import { InPlaceIdentity } from "../../flow/InPlaceIdentity";
 import { toastMissing } from "../../flow/missingData";
+import { BlockedStep } from "../../steps/BlockedStep";
 import { ConfirmedStep } from "../../steps/ConfirmedStep";
 import { GiftStep } from "../../steps/GiftStep";
 import { ManageStep } from "../../steps/ManageStep";
 import { PackagesStep } from "../../steps/PackagesStep";
+import { PhoneStep } from "../../steps/PhoneStep";
+import { ProfileStep } from "../../steps/ProfileStep";
+import { VerifyStep } from "../../steps/VerifyStep";
 import { WaitlistedStep } from "../../steps/WaitlistedStep";
 import { defaultServiceId } from "./agendaModel";
 import { AgendaBoard } from "./AgendaBoard";
 import { AgendaCartBar } from "./AgendaCart";
 import { AgendaHeader } from "./AgendaHeader";
-import { AgendaIdentity } from "./AgendaIdentity";
 import { AgendaSelectCheckout, AgendaSelectPay } from "./AgendaSelectCheckout";
 
 interface AgendaFlowProps {
@@ -28,15 +32,24 @@ interface AgendaFlowProps {
   onFinish?: () => void;
 }
 
-/** Pantallas que no son la agenda: el final, «Mis citas» y lo que se compra aparte. */
-const OWN_SCREENS: ReadonlySet<BookingStep> = new Set(["confirmed", "waitlisted", "manage", "gift", "packages"]);
+/**
+ * La entrada: la portada de Paso a paso con el celular. Quien vuelve no pasa por la bienvenida de
+ * Paso a paso: entra directo a su agenda (su sede, su servicio y «Lo de siempre»). El número
+ * bloqueado va a su aviso.
+ */
+const ENTRY_SCREENS: ReadonlySet<BookingStep> = new Set(["phone", "verify", "profile", "blocked"]);
+/** Lo que se abre aparte y vuelve a donde estaba: «Mis citas» y lo que se compra aparte. */
+const SIDE_SCREENS: ReadonlySet<BookingStep> = new Set(["manage", "gift", "packages"]);
+/** Pantallas que no son la agenda: la entrada, el final, «Mis citas» y lo que se compra aparte. */
+const OWN_SCREENS: ReadonlySet<BookingStep> = new Set([...ENTRY_SCREENS, ...SIDE_SCREENS, "confirmed", "waitlisted"]);
 
 /**
- * Agenda con selector: la reserva que parte del «¿cuándo?». Sede, servicios y
+ * Agenda: la reserva que parte del «¿cuándo?». Entra por la portada de Paso a
+ * paso (el celular; quien vuelve va directo a su agenda). Sede, servicios y
  * barbero se eligen en campos que abren su lista (sin cuenta abren vacíos: nada
  * elegido por la persona, y la sede va primero); luego se aparta una hora con un
- * toque; en «Confirma tu cita» se revisa, se suman productos u otra cita y se
- * pregunta quién es, y el pago va aparte, en su propia pantalla.
+ * toque; en «Confirma tu cita» se revisa y se suman productos u otra cita, y el
+ * pago va aparte, en su propia pantalla, que antes de cobrar pide el código.
  */
 export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
   const t = useAppT();
@@ -52,14 +65,17 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
   const seededDraft = React.useRef<string | null>(null);
   const isWide = layout === "wide";
   const ownScreen = OWN_SCREENS.has(state.step);
+  const isEntry = ENTRY_SCREENS.has(state.step);
+
 
   // La sede: con cuenta, la de siempre o la primera; sin cuenta y con varias, la elige la persona (abre vacía).
   // Con una sola sede no hay nada que elegir.
   React.useEffect(() => {
-    if (state.branchId || shop.branches.length === 0) return;
+    // En la portada todavía no: elegir sede mueve el paso. Quien vuelve sale de ella con su sede de siempre.
+    if (isEntry || state.branchId || shop.branches.length === 0) return;
     if (!state.customer && shop.branches.length > 1) return;
     dispatch({ type: "chooseBranch", branchId: defaultBranchId(state.customer, shop.branches.map((item) => item.id)) ?? shop.branches[0].id });
-  }, [state.branchId, state.customer, shop.branches, dispatch]);
+  }, [isEntry, state.branchId, state.customer, shop.branches, dispatch]);
 
   // Siempre hay una cita en borrador. Sin cuenta abre vacía: servicio y barbero los elige la persona.
   // Con cuenta abre con el servicio más pedido para enseñar horas desde el primer momento. Tras apartar
@@ -91,8 +107,19 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
     for (let extra = state.items.length - 1; extra > held; extra -= 1) dispatch({ type: "removeItem", index: held });
   }, [state.items.length, held, dispatch]);
 
+  // La hora apartada es de un barbero y unos servicios: si en la agenda se cambia cualquiera de los dos,
+  // esa hora ya no vale (ni su precio) y se suelta para elegir otra.
+  const pending = state.items[held];
+  const draftBarberId = state.draft?.barberId ?? null;
+  const draftServices = state.draft?.serviceIds;
+  React.useEffect(() => {
+    if (!pending || !draftServices || view !== "board" || ownScreen) return;
+    const sameServices = pending.serviceIds.length === draftServices.length && pending.serviceIds.every((id) => draftServices.includes(id));
+    if ((pending.barberId ?? null) !== draftBarberId || !sameServices) dispatch({ type: "removeItem", index: held });
+  }, [pending, draftBarberId, draftServices, view, ownScreen, held, dispatch]);
+
   // Al entrar desde la cabecera, la hoja se cierra sola: ya se sabe quién es.
-  if (signInOpen && state.customer) setSignInOpen(false);
+  if (signInOpen && state.customer && state.verified) setSignInOpen(false);
 
   // Cada vista empieza arriba; apartar horas en la agenda (que mueve el paso por dentro) no la mueve.
   const screen = ownScreen ? state.step : view;
@@ -119,17 +146,40 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
     dispatch({ type: "openDraft", person: { kind: "self" }, serviceIds: [], barberId: null, barberChosen: false });
     toBoard();
   };
+  // Se arrepiente de sumar otra: la que estaba armando se suelta y vuelve a «Confirma tu cita» con las de antes.
+  // `heldCount` no se toca: son las citas guardadas, y bajarlo borraría las que sobran.
+  const keepHeld = () => {
+    if (state.items.length > held) dispatch({ type: "removeItem", index: held });
+    toCheckout();
+  };
 
-  const back: (() => void) | null = ownScreen
-    ? () => dispatch({ type: "goTo", step: state.step === "manage" && state.reservation ? "confirmed" : "services" })
-    : view === "pay"
+  const back: (() => void) | null =
+    state.step === "phone"
+      ? null
+      : state.step === "verify"
+        ? () => dispatch({ type: "goTo", step: "phone" })
+        : isEntry
+          ? () => dispatch({ type: "restart" })
+          : ownScreen
+            ? () => dispatch({ type: "goTo", step: state.step === "manage" && state.reservation ? "confirmed" : "services" })
+            : view === "pay"
       ? toCheckout
       : view === "checkout"
         ? toBoard
-        : null;
+        : held > 0
+          ? keepHeld
+          : null;
 
   const content =
-    state.step === "confirmed" ? (
+    state.step === "phone" ? (
+      <PhoneStep askProfile={false} />
+    ) : state.step === "verify" ? (
+      <VerifyStep />
+    ) : state.step === "profile" ? (
+      <ProfileStep />
+    ) : state.step === "blocked" ? (
+      <BlockedStep />
+    ) : state.step === "confirmed" ? (
       <ConfirmedStep onFinish={onFinish} />
     ) : state.step === "waitlisted" ? (
       <WaitlistedStep onFinish={onFinish} />
@@ -145,7 +195,7 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
     ) : view === "checkout" ? (
       <AgendaSelectCheckout onContinue={toPay} onAddAnother={addAnother} />
     ) : (
-      <AgendaBoard onNeedSignIn={() => setSignInOpen(true)} timeMissing={timeMissing} heldCount={held} />
+      <AgendaBoard onNeedSignIn={() => setSignInOpen(true)} timeMissing={timeMissing} heldCount={held} onBackToHeld={keepHeld} />
     );
 
   return (
@@ -153,7 +203,10 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
       {/* «Tu reserva» ocupa todo el alto: la cabecera llega hasta el panel. */}
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          <AgendaHeader onBack={state.step === "confirmed" || state.step === "waitlisted" ? null : back} onSignIn={() => setSignInOpen(true)} trailing={headerTrailing} showChat={!ownScreen && view === "board"} />
+          {/* La portada no lleva cabecera: la marca ya está en su tarjeta. El widget la conserva por su botón de cerrar. */}
+          {(state.step !== "phone" || headerTrailing) && (
+            <AgendaHeader onBack={state.step === "confirmed" || state.step === "waitlisted" ? null : back} onSignIn={() => setSignInOpen(true)} trailing={headerTrailing} showChat={!ownScreen && view === "board"} />
+          )}
           <div ref={scrollRef} className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", !isWide && HIDE_SCROLLBAR)}>
             <div className="flex min-h-full w-full flex-col">
               {/* Columna flexible: el pie de cada paso queda pegado abajo aunque el contenido sea corto. */}
@@ -190,8 +243,15 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
             actionSlot
           )}
       </div>
-      <BookingSheet open={signInOpen} onOpenChange={setSignInOpen} title={t("booking.agenda.signInTitle")} description={t("booking.agenda.signInLead")}>
-        <AgendaIdentity />
+      <BookingSheet
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
+        // Con el celular ya dado (en la portada) la hoja solo confirma con el código.
+        title={t(state.phone ? "booking.payIdentity.title" : "booking.agenda.signInTitle")}
+        description={t(state.phone ? "booking.payIdentity.codeLead" : "booking.agenda.signInLead")}
+      >
+        {/* El código se resuelve en la hoja: la agenda de detrás no pasa a «Escribe el código». */}
+        <InPlaceIdentity />
       </BookingSheet>
     </>
   );

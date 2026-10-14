@@ -73,7 +73,6 @@ export function BarberStep() {
                       ★
                     </span>
                     <span className="tabular-nums">{barber.rating.toFixed(1)}</span>
-                    <span className="whitespace-nowrap text-text-muted">({t("booking.barber.reviews", { count: barber.reviews })})</span>
                   </Text>
                   <Text size="sm" weight="medium" tabular as="span">
                     {fmt.money(itemPrice({ serviceIds, barberId: barber.id }, catalog))}

@@ -45,7 +45,8 @@ interface TimeWindowsProps {
   withName?: string;
   /** La hora ya elegida (una sola cita): se queda a la vista, marcada, en vez de desaparecer. */
   selectedTime?: string | null;
-  onPick: (time: string) => void;
+  /** La hora y quienes están libres a esa hora (el primero es el que asigna la agenda sin preferencia). */
+  onPick: (time: string, barberIds: readonly string[]) => void;
   className?: string;
 }
 
@@ -73,7 +74,7 @@ export function TimeWindows({ groups, timeLabel, withName, selectedTime = null, 
                   key={option.time}
                   label={timeLabel(option.time)}
                   taken={option.time === selectedTime || (option.taken && option.barberIds.length === 0)}
-                  onPick={() => onPick(option.time)}
+                  onPick={() => onPick(option.time, option.barberIds)}
                   ariaLabel={withName ? t("booking.agenda.pickWith", { time: timeLabel(option.time), name: withName }) : t("booking.agenda.pickAny", { time: timeLabel(option.time), count: option.barberIds.length })}
                 >
                   {withName || !isPhone

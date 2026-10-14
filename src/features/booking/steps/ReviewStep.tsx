@@ -127,7 +127,7 @@ export function ReviewStep() {
             />
           );
         })}
-        {/* La misma tarjeta que en la Agenda con selector. */}
+        {/* La misma tarjeta que en la Agenda. */}
         <AddCard title={t("booking.review.addAnother")} hint={t("booking.review.addAnotherHint")} onClick={() => dispatch({ type: "addAnother", person: { kind: "self" } })} />
       </div>
 

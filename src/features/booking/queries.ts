@@ -1,6 +1,7 @@
+import * as React from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { bookingApi } from "./api";
-import type { GiftPurchaseInput, NewCustomerInput, PackagePurchaseInput, RescheduleInput, ReservationInput, SavedCardInput, WaitlistInput } from "./types";
+import type { GiftPurchaseInput, NewCustomerInput, OtpSent, PackagePurchaseInput, RescheduleInput, ReservationInput, SavedCardInput, WaitlistInput } from "./types";
 
 /** Claves jerárquicas: reservar o cancelar invalida la disponibilidad y «Mis citas» sin tocar el catálogo. */
 export const bookingKeys = {
@@ -13,7 +14,14 @@ export const bookingKeys = {
     [...bookingKeys.availabilities(), branchId, date, serviceIds.join(","), barberId, exclude ?? null] as const,
   suggestion: (token: string) => [...bookingKeys.all, "suggestion", token] as const,
   mine: (token: string) => [...bookingKeys.all, "mine", token] as const,
+  /** El último código mandado a un celular (lo que respondió el servidor y cuándo). */
+  codeSent: (phone: string) => [...bookingKeys.all, "codeSent", phone.replace(/\D/g, "")] as const,
 };
+
+/** Cuánto vale un código ya mandado para no pedir otro solo por volver a la pantalla que lo pide. */
+export const CODE_REUSE_MS = 5 * 60_000;
+
+type SentCode = OtpSent & { at: number };
 
 export function useBookingShopQuery() {
   return useQuery({ queryKey: bookingKeys.shop(), queryFn: ({ signal }) => bookingApi.shop(signal), staleTime: 10 * 60_000 });
@@ -104,8 +112,34 @@ export function useVisitSuggestionQuery(token: string | null) {
   });
 }
 
+/** ¿Ya es cliente? Solo eso: el perfil llega con el código. */
+export function useCheckPhoneMutation() {
+  return useMutation({ mutationFn: (phone: string) => bookingApi.checkPhone(phone) });
+}
+
+/** Pide un código y anota a qué celular y cuándo: así las pantallas que lo mandan solas no piden otro cada vez que se abren. */
 export function useRequestCodeMutation() {
-  return useMutation({ mutationFn: (phone: string) => bookingApi.requestOtp(phone) });
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (phone: string) => bookingApi.requestOtp(phone),
+    onSuccess: (sent, phone) => queryClient.setQueryData<SentCode>(bookingKeys.codeSent(phone), { ...sent, at: Date.now() }),
+  });
+}
+
+/**
+ * El código mandado hace poco a ese celular, si lo hay. Las pantallas que lo piden solas al abrirse
+ * (pago, lista de espera) lo reutilizan: entrar y salir del pago mandaba uno nuevo cada vez y, a la
+ * quinta, la barbería respondía «Pediste muchos códigos» sin que la persona hubiera pedido ninguno.
+ */
+export function useRecentCode(): (phone: string) => OtpSent | null {
+  const queryClient = useQueryClient();
+  return React.useCallback(
+    (phone: string) => {
+      const sent = queryClient.getQueryData<SentCode>(bookingKeys.codeSent(phone));
+      return sent && Date.now() - sent.at < CODE_REUSE_MS ? { sentTo: sent.sentTo, channel: sent.channel } : null;
+    },
+    [queryClient]
+  );
 }
 
 export function useVerifyCodeMutation() {

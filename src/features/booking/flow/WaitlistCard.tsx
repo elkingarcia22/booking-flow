@@ -23,6 +23,8 @@ interface WaitlistCardProps {
    * ellas («¿Ninguna te sirve?») y se abre al tocarla, para no competir con las horas.
    */
   hasSlots?: boolean;
+  /** Abre la tarjeta aunque haya horas: acaba de entrar para apuntarse. */
+  defaultOpen?: boolean;
 }
 
 /**
@@ -32,11 +34,11 @@ interface WaitlistCardProps {
  * Lo apuntado vive en la reserva (`state.waitlist`): sobrevive a cambiar de día y
  * volver, y sin hora apartada apuntarse lleva directo a su confirmación (`WaitlistedStep`).
  */
-export function WaitlistCard({ day, hasSlots = false }: WaitlistCardProps) {
+export function WaitlistCard({ day, hasSlots = false, defaultOpen = false }: WaitlistCardProps) {
   const t = useAppT();
   const { state, dispatch, shop, catalog, fmt } = useBookingFlow();
   const [window, setWindow] = React.useState<WaitlistWindow>("any");
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const join = useJoinWaitlistMutation(state.token);
   const leave = useLeaveWaitlistMutation(state.token);
   const draft = state.draft;

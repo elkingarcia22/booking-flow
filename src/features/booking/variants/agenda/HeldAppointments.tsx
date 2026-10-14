@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Text } from "@/components/typography";
+import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { personName } from "../../bookingState";
@@ -12,9 +13,10 @@ import { itemDuration, itemPrice } from "../../useBookingTotals";
 
 /**
  * Las citas ya apartadas mientras se arma otra: una tarjeta que dice cuántas hay y cuándo es la
- * última, y al tocarla abre su detalle (desde abajo en celular y tablet, modal en monitor).
+ * última, y al tocarla abre su detalle (desde abajo en celular y tablet, modal en monitor). Con
+ * `onBack`, debajo va la salida: volver a «Confirma tu cita» sin sumar otra.
  */
-export function HeldAppointments({ count }: { count: number }) {
+export function HeldAppointments({ count, onBack }: { count: number; onBack?: () => void }) {
   const t = useAppT();
   const { state, catalog, fmt } = useBookingFlow();
   const [open, setOpen] = React.useState(false);
@@ -46,6 +48,12 @@ export function HeldAppointments({ count }: { count: number }) {
           <ThemaIcon name="chevronRight" size="xs" className="transition-transform duration-fast group-hover:translate-x-0.5" />
         </Text>
       </button>
+      {onBack && (
+        <Button type="button" variant="link" size="sm" className="-mt-4 self-start px-0" onClick={onBack}>
+          <ThemaIcon name="arrowLeft" />
+          {t("booking.agenda.heldBack")}
+        </Button>
+      )}
 
       <BookingOverlay open={open} onOpenChange={setOpen} title={t("booking.agenda.heldTitle", { count })} description={t("booking.agenda.heldLead")}>
         <div className="flex flex-col gap-3">

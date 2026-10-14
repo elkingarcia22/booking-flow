@@ -145,7 +145,7 @@ export function useVoiceBridge(
 
   /**
    * El saludo con el que Clipper abre la llamada. Desde Paso a paso, el de la conversación (pide el
-   * celular para saber quién eres); desde la Agenda con selector o la portada, qué quieres hacer hoy.
+   * celular para saber quién eres); desde la Agenda o la portada, qué quieres hacer hoy.
    */
   const greet = React.useCallback(
     (origin: VoiceOrigin): Promise<ChatReply> => {

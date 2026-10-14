@@ -241,7 +241,8 @@ export function useChatCheckout(kit: CheckoutKit) {
 
   const manage = async () => {
     const token = stateRef.current.token;
-    if (!token || !stateRef.current.customer) {
+    // «Mis citas» pide el código: el cliente reconocido solo por su celular aún no lo confirmó.
+    if (!token || !stateRef.current.customer || !stateRef.current.verified) {
       pendingManage.current = true;
       return askPhone(t("booking.chat.manageNeedsPhone"));
     }

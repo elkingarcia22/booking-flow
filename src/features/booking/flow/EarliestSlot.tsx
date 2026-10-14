@@ -42,7 +42,7 @@ export function EarliestSlot() {
           {withName && <Text as="span" size="sm" tone="secondary" weight="normal">{` · ${t("booking.earliest.with", { name: withName })}`}</Text>}
         </Text>
       </div>
-      <Button type="button" size="sm" onClick={() => dispatch({ type: "chooseTime", start })} aria-label={t("booking.earliest.book", { when: `${day} ${fmt.time(when)}` })}>
+      <Button type="button" size="sm" onClick={() => dispatch({ type: "chooseTime", start, assignedBarberId: slot.barberId })} aria-label={t("booking.earliest.book", { when: `${day} ${fmt.time(when)}` })}>
         {t("booking.earliest.cta")}
       </Button>
     </div>

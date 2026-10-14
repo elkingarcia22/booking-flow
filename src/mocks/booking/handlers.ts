@@ -72,6 +72,8 @@ const findClient = (id: string) => db.calendar.clients.find((client) => client.i
 
 /** Una sesión verificada es de un cliente (su id) o de un celular nuevo aún sin perfil (`phone:+57…`). */
 const PHONE_SESSION = "phone:";
+/** La sesión de vista previa (reconocido por su celular, sin código): solo sirve para su propuesta de visita. */
+const PREVIEW_SESSION = "preview:";
 const sessionValue = (request: Request): string | undefined => {
   const token = request.headers.get("x-booking-token");
   return token ? db.bookingSessions.get(token) : undefined;
@@ -79,7 +81,14 @@ const sessionValue = (request: Request): string | undefined => {
 
 function sessionClient(request: Request): MockClient | null {
   const value = sessionValue(request);
-  return value && !value.startsWith(PHONE_SESSION) ? findClient(value) ?? null : null;
+  return value && !value.startsWith(PHONE_SESSION) && !value.startsWith(PREVIEW_SESSION) ? findClient(value) ?? null : null;
+}
+
+/** El cliente de una sesión verificada o de vista previa: solo para lo que se ve sin código. */
+function previewClient(request: Request): MockClient | null {
+  const value = sessionValue(request);
+  if (value?.startsWith(PREVIEW_SESSION)) return findClient(value.slice(PREVIEW_SESSION.length)) ?? null;
+  return sessionClient(request);
 }
 
 /** El celular verificado de una sesión que todavía no tiene perfil. */
@@ -99,12 +108,16 @@ const CODE_LIMIT = 5;
 const CODE_WINDOW_MS = 10 * 60_000;
 const ATTEMPT_LIMIT = 5;
 const codeRequests = new Map<string, number[]>();
+/** Consultas de «¿ya es cliente?» por origen, para que no sirvan para recorrer números. */
+const CHECK_LIMIT = 20;
+let phoneChecks: number[] = [];
 const codeFailures = new Map<string, number>();
 const phoneKey = (phone: string) => phone.replace(/\D/g, "");
 /** Para las pruebas: cada prueba empieza sin intentos acumulados. */
 export function resetBookingLimits(): void {
   codeRequests.clear();
   codeFailures.clear();
+  phoneChecks = [];
 }
 
 /** Luhn: la misma comprobación que hace la pasarela antes de hablar con el banco. */
@@ -330,7 +343,7 @@ export const bookingHandlers = [
 
   http.get(`${BASE}/me/suggestion`, async ({ request }) => {
     await delay(LATENCY_MS);
-    const client = sessionClient(request);
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
     // Sin ritmo de visitas todavía (cliente nuevo) no hay nada que proponer.
     return HttpResponse.json({ suggestion: visitSuggestion(client) });
@@ -399,9 +412,11 @@ export const bookingHandlers = [
     const promo = promoResult && "promo" in promoResult ? promoResult.promo : null;
     const tip = tipOptions().options.find((option) => option.id === text(input.tipId)) ?? null;
     const method = text(input.method) as MockReservation["payment"]["method"];
-    // Cortesía de cliente frecuente: si la pide y tiene una por usar, se descuenta el servicio de cortesía.
+    // Cortesía de cliente frecuente: si la pide y tiene una por usar, se descuenta el servicio de cortesía
+    // a lo que cobra el barbero de la cita que lo lleva (cada barbero tiene su precio).
     const loyalty = input.useReward === true ? customer.loyalty : null;
-    const rewardValue = loyalty && loyalty.available > 0 ? loyalty.rewardValue : 0;
+    const rewardItem = loyalty ? plan.planned.find((item) => item.serviceIds.includes(loyalty.rewardServiceId)) : undefined;
+    const rewardValue = loyalty && loyalty.available > 0 ? ((rewardItem && barberPrice(rewardItem.barberId, loyalty.rewardServiceId)) ?? loyalty.rewardValue) : 0;
     // Paquetes: cada cita con un servicio que tiene visitas por usar se paga con una.
     const coverage = input.usePackages === true ? coverByPackages(plan.planned.map((item) => item.serviceIds.map((serviceId) => ({ serviceId, price: barberPrice(item.barberId, serviceId) ?? 0 }))), activePackages(client.id)) : { amount: 0, used: {} };
     // Tarjeta de regalo: paga primero; lo que sobra queda en ella.
@@ -506,6 +521,26 @@ export const bookingHandlers = [
     return HttpResponse.json(reservationView(reservation), { status: 201 });
   }),
 
+  http.post(`${BASE}/phone/check`, async ({ request }) => {
+    await delay(LATENCY_MS);
+    const phone = text(asRecord(await request.json().catch(() => ({}))).phone);
+    if (phoneKey(phone).length < 8) return error(422, "validation", "Escribe un celular válido.", { fields: { phone: ["Escribe un celular válido."] } });
+    const now = Date.now();
+    phoneChecks = phoneChecks.filter((at) => now - at < CODE_WINDOW_MS);
+    if (phoneChecks.length >= CHECK_LIMIT) return error(429, "rate_limited", "Muchas consultas seguidas. Espera unos minutos e inténtalo otra vez.");
+    phoneChecks = [...phoneChecks, now];
+    const client = clientByPhone(phone);
+    // Un número bloqueado responde como cliente, sin perfil: lo sabe tras el código.
+    if (isBlockedPhone(phone, client)) return HttpResponse.json({ returning: true, token: null, customer: null });
+    if (!client) return HttpResponse.json({ returning: false, token: null, customer: null });
+    seedDemoGuests(client);
+    const token = `bkp_${crypto.randomUUID()}`;
+    db.bookingSessions.set(token, `${PREVIEW_SESSION}${client.id}`);
+    // Lo justo para su bienvenida: nada de correo, tarjetas, saldo, paquetes ni membresía hasta el código.
+    const customer = { ...customerOf(client), email: "", cards: [], credit: 0, packages: [], loyalty: null };
+    return HttpResponse.json({ returning: true, token, customer });
+  }),
+
   http.post(`${BASE}/otp/request`, async ({ request }) => {
     await delay(LATENCY_MS);
     const phone = text(asRecord(await request.json().catch(() => ({}))).phone);
@@ -516,7 +551,8 @@ export const bookingHandlers = [
     codeRequests.set(phoneKey(phone), [...recent, now]);
     codeFailures.delete(phoneKey(phone));
     // Responde igual sea o no cliente: el número no revela nada hasta verificar el código.
-    return HttpResponse.json({ sentTo: `•••• ${phoneKey(phone).slice(-4)}`, channel: "whatsapp" });
+    // El código va por mensaje de texto (SMS), no por WhatsApp.
+    return HttpResponse.json({ sentTo: `•••• ${phoneKey(phone).slice(-4)}`, channel: "sms" });
   }),
 
   http.post(`${BASE}/otp/verify`, async ({ request }) => {

@@ -20,7 +20,7 @@ export function BookingSummaryAside({
 }: {
   /** El hueco al pie para la acción principal del paso (seguir, pagar). */
   actionSlotRef?: (element: HTMLElement | null) => void;
-  /** La cita en curso solo hasta apartar la hora (Agenda con selector: hay una sola cita). */
+  /** La cita en curso solo hasta apartar la hora (Agenda: hay una sola cita). */
   draftUntilBooked?: boolean;
   /** Si ya se está pagando (muestra cómo se paga). Por defecto, el paso de pago. */
   atPayment?: boolean;

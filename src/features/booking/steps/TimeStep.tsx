@@ -1,8 +1,9 @@
 import * as React from "react";
 import { startOfDay } from "date-fns";
 import { useAppT } from "@/app/i18n";
+import { EmptyState } from "@/components/feedback/EmptyState";
 import { TimeSlotPicker } from "@/components/scheduling";
-import { Heading, Text } from "@/components/typography";
+import { Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/utility/IconTile";
@@ -12,8 +13,8 @@ import { AlternativeBarbers } from "../flow/AlternativeBarbers";
 import { EarliestSlot } from "../flow/EarliestSlot";
 import { useBookingFlow } from "../flow/BookingContext";
 import { StepLayout } from "../flow/StepLayout";
-import { WaitlistCard } from "../flow/WaitlistCard";
-import { useAvailabilityQuery } from "../queries";
+import { WaitlistSignIn } from "../flow/WaitlistSignIn";
+import { useAvailabilityQuery, useEarliestQuery } from "../queries";
 import { itemDuration } from "../useBookingTotals";
 
 /** Cuántos días hacia delante se puede reservar. */
@@ -38,6 +39,8 @@ export function TimeStep() {
   const [day, setDay] = React.useState<Date>(() => (draft?.start ? startOfDay(parseStart(draft.start)) : branch ? firstBookableDay(branch.closesAt, shop.minNoticeMinutes) : startOfDay(new Date())));
   const availability = useAvailabilityQuery({ branchId: state.branchId, date: dayKeyOf(day), serviceIds: draft?.serviceIds ?? [], barberId: draft?.barberId ?? null });
   const free = React.useMemo(() => new Set((availability.data?.date === dayKeyOf(day) ? availability.data.slots : []).map((slot) => slot.time)), [availability.data, day]);
+  // El primer hueco libre (la misma consulta que «Lo antes posible»): el aviso del día vacío salta a él.
+  const nextSlot = useEarliestQuery({ branchId: state.branchId, serviceIds: draft?.serviceIds ?? [], barberId: draft?.barberId ?? null }).data?.slot ?? null;
   const isWaiting = availability.isLoading || (availability.isFetching && availability.data?.date !== dayKeyOf(day));
   const barber = catalog?.barbers.find((item) => item.id === draft?.barberId);
   const minutes = itemDuration(draft?.serviceIds ?? [], catalog);
@@ -74,7 +77,12 @@ export function TimeStep() {
 
       <TimeSlotPicker
         value={draft.start ? parseStart(draft.start) : null}
-        onChange={(date) => dispatch({ type: "chooseTime", start: toStart(date) })}
+        onChange={(date) => {
+          const start = toStart(date);
+          // Sin preferencia, el precio es el de quien la agenda asigna a esa hora: el primero libre.
+          const assignedBarberId = availability.data?.slots.find((slot) => slot.time === start.slice(11, 16))?.barberIds[0] ?? null;
+          dispatch({ type: "chooseTime", start, assignedBarberId });
+        }}
         day={day}
         onDayChange={setDay}
         daysCount={BOOKING_WINDOW_DAYS}
@@ -85,15 +93,20 @@ export function TimeStep() {
         isSlotDisabled={(date) => !free.has(clockOf(date))}
         hideUnavailable
         emptyDay={
-          <div className="flex items-start gap-3 rounded-2xl border border-border bg-surface-subtle p-4">
-            <IconTile size="md" shape="circle" tone="neutral" icon={<ThemaIcon name="calendar" />} />
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <Heading level={6}>{t("booking.time.noSlotsTitle", { day: fmt.dayLong(day) })}</Heading>
-              <Text size="sm" tone="secondary">
-                {barber ? t("booking.time.noSlotsWith", { name: barber.name.split(" ")[0] }) : t("booking.time.noSlotsAny")}
-              </Text>
-            </div>
-          </div>
+          // El mismo aviso que la Agenda en lista: qué día no tiene horas y un salto al primero que sí.
+          <EmptyState
+            icon="calendar"
+            title={barber ? t("booking.agenda.emptyBarberDay", { name: barber.name.split(" ")[0] ?? barber.name, day: fmt.dayLong(day) }) : t("booking.agenda.emptyDayTitle", { day: fmt.dayLong(day) })}
+            description={barber ? t("booking.agenda.emptyBarberDayLead") : t("booking.agenda.emptyDayLead")}
+            action={
+              nextSlot && nextSlot.date !== dayKeyOf(day) ? (
+                <Button type="button" onClick={() => setDay(startOfDay(parseStart(`${nextSlot.date}T00:00`)))}>
+                  {t("booking.agenda.jumpTo", { day: fmt.dayShort(parseStart(`${nextSlot.date}T00:00`)) })}
+                  <ThemaIcon name="arrowRight" />
+                </Button>
+              ) : undefined
+            }
+          />
         }
         loading={isWaiting}
         size={touch}
@@ -101,10 +114,8 @@ export function TimeStep() {
 
       {!isWaiting && free.size === 0 && <AlternativeBarbers day={day} onDayChange={setDay} />}
 
-      {/* Siempre: aunque haya horas, puede que ninguna le sirva. */}
-      {!isWaiting && (
-        <WaitlistCard key={`${dayKeyOf(day)}|${draft.barberId ?? "any"}`} day={day} hasSlots={free.size > 0} />
-      )}
+      {/* Siempre: aunque haya horas, puede que ninguna le sirva. Sin cuenta, pide el celular y el código, como la Agenda. */}
+      {!isWaiting && <WaitlistSignIn key={`${dayKeyOf(day)}|${draft.barberId ?? "any"}`} day={day} hasSlots={free.size > 0} />}
 
       {/* Al final de todo: si aquí no hay horario o algo falla, se agenda por teléfono. */}
       {!isWaiting && (

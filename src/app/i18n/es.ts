@@ -2702,7 +2702,7 @@ export const appEs = {
   "cfg.booking.widget": "Reserva en tu sitio web",
   "cfg.booking.widgetHint": "Tres formas de poner la reserva en tu página. Si no manejas el código de tu sitio, pásale el fragmento a quien lo haga.",
   "cfg.booking.widgetFloating": "Botón flotante",
-  "cfg.booking.widgetFloatingHint": "Añade un botón abajo a la derecha; la reserva se abre en un panel sin salir de tu página.",
+  "cfg.booking.widgetFloatingHint": "Añade un botón abajo a la derecha; la reserva se abre en un panel lateral que corre tu página a la izquierda, sin salir de ella.",
   "cfg.booking.widgetTrigger": "Desde un enlace tuyo",
   "cfg.booking.widgetTriggerHint": "Sin botón flotante: se abre desde un enlace que ya tengas. Cambia #reservar por el id del tuyo.",
   "cfg.booking.widgetInline": "Dentro de la página",

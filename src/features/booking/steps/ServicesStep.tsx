@@ -16,7 +16,6 @@ import { useBookingFlow } from "../flow/BookingContext";
 import { toastMissing } from "../flow/missingData";
 import { PersonPicker } from "../flow/PersonPicker";
 import { StepLayout } from "../flow/StepLayout";
-import { FIRST_VISIT_PROMO } from "../pricing";
 import { fromPrice, itemDuration, itemPrice } from "../useBookingTotals";
 
 const ALL = "__all__";
@@ -77,20 +76,6 @@ export function ServicesStep() {
         </div>
       }
     >
-      {/* Primera visita: el descuento se dice aquí, donde decide, y se aplica solo al pagar. */}
-      {state.customer?.isNew && FIRST_VISIT_PROMO && (
-        <div className="flex items-center gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-3">
-          <IconTile size="md" shape="circle" icon={<ThemaIcon name="ticket" />} />
-          <div className="flex min-w-0 flex-col">
-            <Text size="sm" weight="semibold">
-              {t("booking.firstVisit.title", { value: FIRST_VISIT_PROMO.type === "percent" ? `${FIRST_VISIT_PROMO.value} %` : fmt.money(FIRST_VISIT_PROMO.value) })}
-            </Text>
-            <Text size="xs" tone="secondary">
-              {t("booking.firstVisit.hint")}
-            </Text>
-          </div>
-        </div>
-      )}
       <PersonPicker />
 
       <div className="flex flex-col gap-3">

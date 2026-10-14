@@ -10,6 +10,7 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { useBookingFlow } from "../flow/BookingContext";
+import { PayIdentity } from "../flow/PayIdentity";
 import { toastMissing } from "../flow/missingData";
 import { brandFromName, isCvcComplete, type CardValues } from "../flow/cardValidation";
 import { NewCardSheet } from "../flow/NewCardSheet";
@@ -31,6 +32,20 @@ const MIN_PHONE_DIGITS = 10;
  * reserva, y el saldo que sobre le queda para la próxima.
  */
 export function GiftStep() {
+  const t = useAppT();
+  const { state } = useBookingFlow();
+  // Se paga con su tarjeta: primero el código (al cliente de siempre se le reconoce sin él al entrar).
+  if (!state.verified || !state.customer) {
+    return (
+      <StepLayout title={t("booking.payIdentity.title")} lead={t("booking.payIdentity.leadBuy")}>
+        <PayIdentity />
+      </StepLayout>
+    );
+  }
+  return <GiftBody key={state.customer.id} />;
+}
+
+function GiftBody() {
   const t = useAppT();
   const { state, dispatch, shop, fmt } = useBookingFlow();
   const buy = useBuyGiftMutation(state.token);

@@ -35,7 +35,7 @@ import { WelcomeStep } from "./steps/WelcomeStep";
 import type { BookingShop } from "./types";
 import { useBookingEngine } from "./useBookingEngine";
 import { AgendaFlow } from "./variants/agenda/AgendaFlow";
-import { AgendaListModeProvider } from "./variants/agenda/AgendaPicker";
+import { AgendaSelectCheckout, AgendaSelectPay } from "./variants/agenda/AgendaSelectCheckout";
 import { ChatFlow } from "./variants/chat/ChatFlow";
 import type { BookingVersion } from "./versions";
 
@@ -59,7 +59,9 @@ export interface BookingFlowProps {
 
 /** A dónde lleva «Atrás» desde cada paso; `null` = no hay atrás. */
 function backAction(state: BookingState, shop: BookingShop): BookingAction | null {
-  const identity: BookingAction = state.customer && !state.customer.isNew ? { type: "goTo", step: "welcome" } : { type: "restart" };
+  // Antes de la cita: la bienvenida del de siempre, los datos del nuevo (aún sin ficha) o el inicio.
+  const identity: BookingAction =
+    state.customer && !state.customer.isNew ? { type: "goTo", step: "welcome" } : !state.customer && state.pendingProfile ? { type: "goTo", step: "profile" } : { type: "restart" };
   switch (state.step) {
     case "verify":
       return { type: "goTo", step: "phone" };
@@ -95,7 +97,16 @@ function backAction(state: BookingState, shop: BookingShop): BookingAction | nul
   }
 }
 
-function StepSwitch({ state, onFinish }: { state: BookingState; onFinish?: () => void }) {
+/** «Confirma tu cita» y el pago de la Agenda dentro de Paso a paso (la versión «Según el cliente»). */
+function AgendaCheckoutSteps({ step }: { step: "review" | "payment" }) {
+  const { state, dispatch } = useBookingFlow();
+  if (step === "review") return <AgendaSelectCheckout onContinue={() => dispatch({ type: "goTo", step: "payment" })} onAddAnother={() => dispatch({ type: "addAnother", person: { kind: "self" } })} />;
+  // La hora ya no está: con una cita se vuelve a su hora; con varias, a «Confirma tu cita».
+  return <AgendaSelectPay onChangeTime={() => dispatch(state.items.length > 1 ? { type: "goTo", step: "review" } : { type: "reopenLast" })} />;
+}
+
+function StepSwitch({ state, onFinish, agendaCheckout = false }: { state: BookingState; onFinish?: () => void; agendaCheckout?: boolean }) {
+  if (agendaCheckout && (state.step === "review" || state.step === "payment")) return <AgendaCheckoutSteps step={state.step} />;
   switch (state.step) {
     case "phone":
       return <PhoneStep />;
@@ -132,8 +143,11 @@ function StepSwitch({ state, onFinish }: { state: BookingState; onFinish?: () =>
   }
 }
 
-/** Paso a paso: la cabecera con el progreso, un paso por pantalla y, en monitor, el resumen al lado. */
-function GuidedFlow({ headerTrailing, onFinish }: Pick<BookingFlowProps, "headerTrailing" | "onFinish">) {
+/**
+ * Paso a paso: la cabecera con el progreso, un paso por pantalla y, en monitor, el resumen al lado.
+ * `agendaCheckout`: cierra con «Confirma tu cita» y el pago de la Agenda (versión «Según el cliente»).
+ */
+function GuidedFlow({ headerTrailing, onFinish, agendaCheckout = false }: Pick<BookingFlowProps, "headerTrailing" | "onFinish"> & { agendaCheckout?: boolean }) {
   const { state, dispatch, shop, layout } = useBookingFlow();
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [actionSlot, setActionSlot] = React.useState<HTMLElement | null>(null);
@@ -156,7 +170,7 @@ function GuidedFlow({ headerTrailing, onFinish }: Pick<BookingFlowProps, "header
           <div className="flex min-h-full w-full flex-col">
             {/* En monitor, la acción principal de cada paso va al pie del resumen; sin panel, en la barra de abajo. */}
             <AsideSlotProvider value={showAside ? actionSlot : null}>
-              <StepSwitch state={state} onFinish={onFinish} />
+              <StepSwitch state={state} onFinish={onFinish} agendaCheckout={agendaCheckout} />
             </AsideSlotProvider>
           </div>
         </div>
@@ -168,6 +182,19 @@ function GuidedFlow({ headerTrailing, onFinish }: Pick<BookingFlowProps, "header
       )}
     </div>
   );
+}
+
+/**
+ * «Según el cliente»: la portada (el celular) decide el recorrido. Quien vuelve —reconocido por su
+ * número— entra a la Agenda en lista, con su sede y «Lo de siempre»; el cliente nuevo va Paso a paso
+ * («Conozcámonos», sede, servicios, barbero, hora). Los dos cierran con «Confirma tu cita» y el pago
+ * de la Agenda. El nuevo sigue Paso a paso también después de crear su ficha (`isNew`).
+ */
+function MixedFlow({ headerTrailing, onFinish }: Pick<BookingFlowProps, "headerTrailing" | "onFinish">) {
+  const { state } = useBookingFlow();
+  const isReturning = Boolean(state.customer && !state.customer.isNew);
+  if (isReturning) return <AgendaFlow headerTrailing={headerTrailing} onFinish={onFinish} />;
+  return <GuidedFlow headerTrailing={headerTrailing} onFinish={onFinish} agendaCheckout />;
 }
 
 /**
@@ -190,7 +217,7 @@ export function BookingFlow({ version = "guided", layout = "compact", touch = "d
   // Las ventanas (drawers, modales) se abren dentro de la reserva, no en la
   // ventana: en el marco del celular o en el panel del widget no se salen.
   const [portalRoot, setPortalRoot] = React.useState<HTMLElement | null>(null);
-  // Desde Paso a paso y la Agenda con selector se puede pasar a la Conversación sin salir.
+  // Desde Paso a paso y la Agenda se puede pasar a la Conversación sin salir.
   const [switched, setSwitched] = React.useState<BookingVersion | null>(null);
   const active = switched ?? version;
   const switchToChat = React.useCallback(() => {
@@ -221,20 +248,22 @@ export function BookingFlow({ version = "guided", layout = "compact", touch = "d
   return (
     <BookingFlowProvider value={engine.value}>
       <PortalContainerProvider value={portalRoot}>
-        {/* `translateZ(0)` hace de esta sección el bloque contenedor de lo `fixed`: las ventanas se miden contra ella. */}
+        {/* `translateZ(0)` hace de esta sección el bloque contenedor de lo `fixed`: las ventanas se miden contra ella.
+            `overflow-clip`, no `hidden`: una sección `hidden` se puede desplazar por código, y el navegador la movía al
+            enfocar un campo de una hoja que aún subía (la pantalla saltaba al abrir «Confirma que eres tú»). */}
         <section
           ref={setPortalRoot}
           aria-label={t("booking.phone.title")}
           data-version={active}
-          className={cn("relative isolate flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground [transform:translateZ(0)]", className)}
+          className={cn("relative isolate flex h-full min-h-0 flex-col overflow-clip bg-background text-foreground [transform:translateZ(0)]", className)}
         >
           <Halo x="85%" y="0%" size="60% 40%" strength={0.12} />
           <Grain scope="container" />
           <SwitchToChatProvider value={active !== "chat" ? switchToChat : null}>
-            {active === "agenda-select" || active === "agenda-list" ? (
-              <AgendaListModeProvider value={active === "agenda-list"}>
-                <AgendaFlow headerTrailing={headerTrailing} onFinish={onFinish} />
-              </AgendaListModeProvider>
+            {active === "agenda-list" ? (
+              <AgendaFlow headerTrailing={headerTrailing} onFinish={onFinish} />
+            ) : active === "mixed" ? (
+              <MixedFlow headerTrailing={headerTrailing} onFinish={onFinish} />
             ) : active === "chat" ? (
               <ChatFlow headerTrailing={headerTrailing} onFinish={onFinish} />
             ) : (

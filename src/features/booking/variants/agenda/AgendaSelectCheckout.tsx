@@ -8,15 +8,14 @@ import { toast } from "../../flow/bookingToast";
 import { type DraftItem } from "../../bookingState";
 import { formatPhone, parseStart } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
-import { BookingSheet } from "../../flow/BookingSheet";
 import { PersonSheet } from "../../flow/PersonPicker";
 import { PaymentPanel } from "../../flow/PaymentPanel";
+import { PayIdentity } from "../../flow/PayIdentity";
 import { StepLayout } from "../../flow/StepLayout";
 import { useAsideFooter } from "../../flow/asideSlot";
 import { usePaymentController, type PaymentController } from "../../flow/usePaymentController";
 import { itemPrice } from "../../useBookingTotals";
 import { CheckoutFooter, CheckoutSection } from "./AgendaCheckout";
-import { AgendaIdentity, ProfileForm } from "./AgendaIdentity";
 import { AgendaProductField } from "./AgendaProductField";
 import { AddCard } from "../../flow/AddCard";
 
@@ -107,38 +106,13 @@ function Extras() {
   );
 }
 
-/**
- * Cliente nuevo (ya verificó su celular): sus datos se piden en una hoja que
- * se abre sola. Si la cierra, el botón la vuelve a abrir.
- */
-function NewCustomerDetails() {
-  const t = useAppT();
-  const [isOpen, setIsOpen] = React.useState(true);
-  return (
-    <>
-      <div className="flex flex-col items-start gap-3 rounded-2xl border border-dashed border-border p-3">
-        <Text size="sm" tone="secondary">
-          {t("booking.agenda.id.newLead")}
-        </Text>
-        <Button type="button" onClick={() => setIsOpen(true)}>
-          <ThemaIcon name="edit" />
-          {t("booking.agenda.id.completeCta")}
-        </Button>
-      </div>
-      <BookingSheet open={isOpen} onOpenChange={setIsOpen} title={t("booking.profile.title")} description={t("booking.profile.lead")}>
-        <ProfileForm />
-      </BookingSheet>
-    </>
-  );
-}
-
 /** «Agregar otra cita»: la misma tarjeta que en Paso a paso y que «Agregar productos». */
 function AddAnotherCard({ onClick }: { onClick: () => void }) {
   const t = useAppT();
   return <AddCard title={t("booking.review.addAnother")} hint={t("booking.review.addAnotherHint")} onClick={onClick} />;
 }
 
-/** El pie de «Confirma tu cita» ya identificado: seguir al pago. */
+/** El pie de «Confirma tu cita»: seguir al pago (allí se pide el código). */
 function ContinueFooter({ onContinue }: { onContinue: () => void }) {
   const t = useAppT();
   return (
@@ -157,23 +131,15 @@ interface ReviewProps {
 }
 
 /**
- * «Confirma tu cita» en la Agenda con selector: solo lo de la cita. Las citas
- * en sus tarjetas (con a nombre de quién), sumar otra, los productos y, si aún no
- * ingresó, quién es: al identificarse pasa solo al pago (`AgendaSelectPay`).
+ * «Confirma tu cita» en la Agenda: solo lo de la cita. Las citas en sus tarjetas
+ * (con a nombre de quién), sumar otra y los productos. Quién es no se pregunta
+ * aquí: el celular ya viene de la portada y el código se pide al pagar
+ * (`AgendaSelectPay`), como en Paso a paso.
  */
 export function AgendaSelectCheckout({ onContinue, onAddAnother }: ReviewProps) {
   const t = useAppT();
   const { state } = useBookingFlow();
-  const isSignedIn = Boolean(state.customer);
-  // Sin identificarse, el único botón principal es el de «Tus datos» (enviar el código): el de seguir no se
-  // muestra bloqueado al lado. Al identificarse pasa solo al pago; el botón queda para volver a él.
-  const { footer, portal } = useAsideFooter(isSignedIn ? <ContinueFooter onContinue={onContinue} /> : null);
-  // Se identificó aquí (cliente de siempre, o nuevo al crear su ficha): sigue solo al pago.
-  const wasSignedIn = React.useRef(isSignedIn);
-  React.useEffect(() => {
-    if (isSignedIn && !wasSignedIn.current) onContinue();
-    wasSignedIn.current = isSignedIn;
-  }, [isSignedIn, onContinue]);
+  const { footer, portal } = useAsideFooter(<ContinueFooter onContinue={onContinue} />);
   let index = 0;
   const next = () => ++index;
   return (
@@ -184,15 +150,9 @@ export function AgendaSelectCheckout({ onContinue, onAddAnother }: ReviewProps) 
         ))}
         <AddAnotherCard onClick={onAddAnother} />
       </CheckoutSection>
-      {/* Los productos antes de quién eres: al identificarse ya pasa directo al pago. */}
       <CheckoutSection index={next()} title={t("booking.agenda.checkout.products")}>
         <Extras />
       </CheckoutSection>
-      {!isSignedIn && (
-        <CheckoutSection index={next()} title={t("booking.agenda.checkout.yourDetails")}>
-          {state.token ? <NewCustomerDetails /> : <AgendaIdentity />}
-        </CheckoutSection>
-      )}
       {portal}
     </StepLayout>
   );
@@ -211,13 +171,20 @@ function PayBody({ payment, onChangeTime }: { payment: PaymentController; onChan
 }
 
 /**
- * «Pago» en la Agenda con selector: solo cómo se paga (propina, descuentos,
- * método y tarjeta) y el botón que cobra. Aquí ya se sabe quién es: sin cuenta
- * se vuelve a «Confirma tu cita».
+ * «Pago» en la Agenda: antes de cobrar, el código que confirma que el celular de
+ * la portada es suyo (y la ficha si es la primera vez), igual que en Paso a paso.
+ * Verificado, cómo se paga (propina, descuentos, método y tarjeta) y el botón que cobra.
  */
 export function AgendaSelectPay({ onChangeTime }: { onChangeTime?: () => void }) {
+  const t = useAppT();
   const { state } = useBookingFlow();
-  if (!state.customer) return null;
+  if (!state.verified || !state.customer) {
+    return (
+      <StepLayout title={t(state.verified ? "booking.payIdentity.newTitle" : "booking.payIdentity.title")} lead={t(state.verified ? "booking.payIdentity.newLead" : "booking.payIdentity.lead")}>
+        <PayIdentity />
+      </StepLayout>
+    );
+  }
   return <IdentifiedPay key={state.customer.id} onChangeTime={onChangeTime} />;
 }
 

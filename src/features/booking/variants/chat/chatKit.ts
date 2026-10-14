@@ -53,7 +53,8 @@ export const isKnownAnswer = (question: BookingQuestion, label: string): boolean
   question.multiple ? splitMultipleAnswer(label).every((part) => question.options.includes(splitQuantity(part).option)) : question.options.includes(label);
 
 export interface Handlers {
-  greet: () => void;
+  /** `again`: ya se le había reconocido por su celular y ahora confirmó el código. */
+  greet: (again?: boolean) => void;
   reserved: () => void;
   /** Atiende lo pedido antes de tener sede; `false` si no había nada pendiente. */
   takeIntent: () => boolean;

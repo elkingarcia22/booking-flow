@@ -9,6 +9,7 @@ import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../flow/BookingContext";
+import { PayIdentity } from "../flow/PayIdentity";
 import { toastMissing } from "../flow/missingData";
 import { brandFromName, isCvcComplete, type CardValues } from "../flow/cardValidation";
 import { NewCardSheet } from "../flow/NewCardSheet";
@@ -22,6 +23,20 @@ import { useBuyPackageMutation } from "../queries";
  * con tarjeta y, al reservar, cada servicio cubierto gasta una visita (el pago lo descuenta solo).
  */
 export function PackagesStep() {
+  const t = useAppT();
+  const { state } = useBookingFlow();
+  // Se paga con su tarjeta: primero el código (al cliente de siempre se le reconoce sin él al entrar).
+  if (!state.verified || !state.customer) {
+    return (
+      <StepLayout title={t("booking.payIdentity.title")} lead={t("booking.payIdentity.leadBuy")}>
+        <PayIdentity />
+      </StepLayout>
+    );
+  }
+  return <PackagesBody key={state.customer.id} />;
+}
+
+function PackagesBody() {
   const t = useAppT();
   const { state, dispatch, shop, fmt } = useBookingFlow();
   const buy = useBuyPackageMutation(state.token);

@@ -71,7 +71,7 @@ export function BranchProfileSheet({ branchId, onOpenChange, onChoose }: BranchP
 
 /**
  * Lo de adentro del perfil, sin la ventana: el cajón lo usa y también la lista
- * de sedes de la Agenda con selector, que lo abre sin salir de su modal.
+ * de sedes de la Agenda, que lo abre sin salir de su modal.
  */
 export function BranchProfileBody({ branchId }: { branchId: string }) {
   const t = useAppT();

@@ -55,7 +55,7 @@ interface PaymentPanelProps {
   /** El resumen del pedido al final; la conversación lo enseña en su propia tarjeta. */
   showOrder?: boolean;
   /**
-   * Menos alto, para el cierre de la Agenda con selector: el cupón detrás de un enlace y las formas de pago en filas cortas
+   * Menos alto, para el cierre de la Agenda: el cupón detrás de un enlace y las formas de pago en filas cortas
    * con el detalle solo de la elegida.
    */
   compact?: boolean;
@@ -109,7 +109,7 @@ export function PaymentPanel({ payment, showOrder = true, compact = false, onCha
       )}
       <section className={coveredByGift ? "hidden" : "flex flex-col gap-3"}>
         <SubHeading compact={compact}>{t("booking.payment.method")}</SubHeading>
-        {/* Compacto (Agenda con selector): las formas de pago como tarjetas lado a lado; en el celular, en filas. */}
+        {/* Compacto (Agenda): las formas de pago como tarjetas lado a lado; en el celular, en filas. */}
         <div role="radiogroup" aria-label={t("booking.payment.method")} className={methodCards ? cn("grid gap-2", methods.length === 3 ? "grid-cols-3" : "grid-cols-2") : "flex flex-col gap-2"}>
           {methods.map((option) => (
             <OptionTile

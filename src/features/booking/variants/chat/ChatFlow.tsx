@@ -144,8 +144,8 @@ export function ChatFlow({ headerTrailing, onFinish }: ChatFlowProps) {
   const [arrival] = React.useState(peekVoiceOnArrival);
   const [isVoiceOpen, setIsVoiceOpen] = React.useState(arrival !== null);
   React.useEffect(() => clearVoiceOnArrival(), []);
-  // Cada experiencia conserva su orden: desde la Agenda con selector, el celular se pide al final.
-  const engine = useChatBooking({ onFinish, payment: controllerRef, deferStart: true, identityAt: arrival === "agenda-select" || arrival === "agenda-list" ? "last" : "first" });
+  // Cada experiencia conserva su orden: desde la Agenda, el celular se pide al final.
+  const engine = useChatBooking({ onFinish, payment: controllerRef, deferStart: true, identityAt: arrival === "agenda-list" ? "last" : "first" });
   const startChat = (text?: string) => {
     setIsHome(false);
     engine.begin(text);
@@ -182,7 +182,7 @@ export function ChatFlow({ headerTrailing, onFinish }: ChatFlowProps) {
         onClose={() => setIsVoiceOpen(false)}
         ask={voice.ask}
         // Clipper saluda al abrir la llamada (aún sin conversación): desde Paso a paso pide quién eres;
-        // desde la Agenda con selector o la portada, qué quieres hacer hoy.
+        // desde la Agenda o la portada, qué quieres hacer hoy.
         opening={isHome ? () => voice.greet(arrival === "guided" ? "guided" : "menu") : undefined}
         secret={engine.secret}
         onWrite={(text) => {

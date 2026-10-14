@@ -18,13 +18,17 @@ import { useCreateCustomerMutation } from "../queries";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_NAME = 2;
 
-/** Quien reserva por primera vez: lo justo para crear su ficha en la barbería. */
+/**
+ * Quien reserva por primera vez: lo justo para su ficha en la barbería. Sin código todavía (cliente nuevo
+ * que solo dio su celular) los datos se guardan y la ficha se crea sola al confirmar el código, al pagar.
+ */
 export function ProfileStep() {
   const t = useAppT();
   const { state, dispatch, shop, layout } = useBookingFlow();
   const create = useCreateCustomerMutation(state.token);
   // El permiso para promociones lo da el cliente: empieza sin marcar (Ley 1581).
-  const [values, setValues] = React.useState({ firstName: "", lastName: "", email: "", marketing: false });
+  // Si vuelve atrás desde la cita, sus datos siguen ahí.
+  const [values, setValues] = React.useState(() => state.pendingProfile ?? { firstName: "", lastName: "", email: "", marketing: false });
   const [touched, setTouched] = React.useState(false);
   const serverFields = isApiError(create.error) ? create.error.fieldErrors : undefined;
   const errors = {
@@ -38,8 +42,10 @@ export function ProfileStep() {
     event.preventDefault();
     setTouched(true);
     if (toastMissing(t, [errors.firstName, errors.lastName, errors.email])) return;
+    const profile = { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing };
+    if (!state.verified) return dispatch({ type: "profileDrafted", profile, onlyBranchId: shop.branches.length === 1 ? (shop.branches[0]?.id ?? null) : null });
     create.mutate(
-      { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing },
+      profile,
       { onSuccess: (customer) => dispatch({ type: "profileSaved", customer, onlyBranchId: defaultBranchId(customer, shop.branches.map((item) => item.id)) }) }
     );
   };

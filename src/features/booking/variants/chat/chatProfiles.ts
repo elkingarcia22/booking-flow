@@ -3,15 +3,13 @@ import { describeError } from "@/lib/api";
 import { bookingApi } from "../../api";
 import type { BookingAction, BookingState } from "../../bookingState";
 import { WEEK_ORDER, formatPhone, openStateOf, parseStart, type BookingFormatters } from "../../bookingFormat";
-import type { BarberReview, BookingBarber, BookingCatalog, BookingShop, BranchDetail } from "../../types";
+import type { BookingBarber, BookingCatalog, BookingShop, BranchDetail } from "../../types";
 import { itemPrice } from "../../useBookingTotals";
 import { ableBarbers } from "../agenda/agendaModel";
 import { makeQuestion, type BookingQuestion, type QuestionEntry } from "./chatQuestions";
 import type { MessageInput } from "./chatKit";
 
-const REVIEWS_SHOWN = 2;
 const PRICES_SHOWN = 4;
-const STARS = 5;
 /** Palabras que piden conocer a alguien o algo antes de elegir. */
 const ASKS_DETAIL = /\b(perfil|conocer|conoce|quien es|detalle|detalles|como es|fotos|resenas|trabajos|informacion|info de|ver la sede|ver sede|sobre)\b/;
 
@@ -134,20 +132,18 @@ export function useChatProfiles(kit: ProfilesKit) {
       .join("\n\n");
   };
 
-  const barberText = (barber: BookingBarber, reviews: readonly BarberReview[]): string => {
+  const barberText = (barber: BookingBarber): string => {
     const draft = stateRef.current.draft;
     const services = catalogRef.current?.services ?? [];
     const priced = draft && draft.serviceIds.length > 0 && draft.serviceIds.every((id) => barber.prices[id] !== undefined)
       ? [`${serviceNames(draft.serviceIds)}: ${fmt.money(itemPrice({ serviceIds: draft.serviceIds, barberId: barber.id }, catalogRef.current))}`]
       : services.filter((service) => barber.prices[service.id] !== undefined).slice(0, PRICES_SHOWN).map((service) => `${service.name}: ${fmt.money(barber.prices[service.id] ?? service.price)}`);
-    const quotes = reviews.filter((review) => review.comment.trim()).slice(0, REVIEWS_SHOWN).map((review) => `> «${review.comment}» — ${review.clientName} · ${"★".repeat(Math.round(review.rating))}${"☆".repeat(STARS - Math.round(review.rating))}`);
     return [
-      `**${barber.name}**${barber.level ? ` · ${barber.level}` : ""} · ★ ${barber.rating.toFixed(1)} (${t("booking.barber.reviews", { count: barber.reviews })})`,
+      `**${barber.name}**${barber.level ? ` · ${barber.level}` : ""} · ★ ${barber.rating.toFixed(1)}`,
       barber.description,
       barber.skills.length > 0 ? `**${t("booking.barber.skills")}:** ${barber.skills.join(", ")}` : "",
       priced.length > 0 ? `**${t("booking.barber.prices")}:** ${priced.join(" · ")}` : "",
       barber.instagram ? `[Instagram](${instagramUrl(barber.instagram)})` : "",
-      quotes.length > 0 ? `**${t("booking.chat.theySay")}**\n\n${quotes.join("\n\n")}` : "",
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -176,10 +172,9 @@ export function useChatProfiles(kit: ProfilesKit) {
     }
   };
 
-  /** El perfil de un barbero con sus reseñas; después, si lo elige para la cita que se arma. */
+  /** El perfil de un barbero (con su calificación, sin reseñas); después, si lo elige para la cita que se arma. */
   const showBarber = async (barber: BookingBarber) => {
-    const reviews = await busy(() => bookingApi.barberReviews(barber.id).then((result) => result.items, () => []));
-    say({ text: barberText(barber, reviews), photos: barber.gallery, photosTitle: barber.name });
+    say({ text: barberText(barber), photos: barber.gallery, photosTitle: barber.name });
     const draft = stateRef.current.draft;
     if (!draft || draft.serviceIds.length === 0) return resume();
     const doesAll = draft.serviceIds.every((id) => barber.prices[id] !== undefined);

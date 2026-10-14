@@ -6,7 +6,7 @@ import { ThemaIcon, type IconName } from "@/icons";
 /**
  * Las tarjetas que suman algo a la reserva («Agregar otra cita», «Agregar productos»): secundarias,
  * sin botón, pero con el filo y el fondo dorados de «Lo antes posible» para que se noten. Las mismas
- * en Paso a paso y en la Agenda con selector.
+ * en Paso a paso y en la Agenda.
  */
 export const ADD_CARD_CLASS =
   "group flex w-full items-center gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-3 text-left transition-colors duration-fast hover:border-primary/70 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";

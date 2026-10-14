@@ -112,7 +112,7 @@
 
 .clipper-orb__stripes-band {
   fill: var(--clipper-orb-stripe);
-  animation: clipper-orb-spin 3.2s linear infinite;
+  animation: clipper-orb-spin 1.6s linear infinite;
 }
 
 /*
@@ -132,11 +132,12 @@
   position: absolute;
   inset: 0 0 calc(var(--clipper-orb-size) * -0.4) 0;
   background-image: repeating-linear-gradient(135deg, var(--clipper-orb-stripe-small) 0 calc(var(--clipper-orb-size) * 0.12), transparent calc(var(--clipper-orb-size) * 0.12) calc(var(--clipper-orb-size) * 0.25));
-  animation: clipper-orb-rise-small 2.4s linear infinite;
+  animation: clipper-orb-rise-small 1.25s linear infinite;
 }
 
+/* Las franjas con la misma tinta que el orbe grande: a 0.35 se perdían y el botón no se leía como poste. */
 .clipper-orb[data-small] {
-  --clipper-orb-stripe-small: hsl(var(--background) / 0.35);
+  --clipper-orb-stripe-small: hsl(var(--background) / 0.78);
   perspective: none;
 }
 
@@ -150,7 +151,7 @@
 
 /* Escuchando: gira más rápido y la esfera late. */
 .clipper-orb[data-state="listening"] .clipper-orb__stripes-band {
-  animation-duration: 1.2s;
+  animation-duration: 0.9s;
 }
 
 .clipper-orb[data-state="listening"] {
@@ -193,7 +194,7 @@ html:not(.dark) .clipper-orb__glass {
 }
 
 html:not(.dark) .clipper-orb[data-small] {
-  --clipper-orb-stripe-small: hsl(var(--foreground) / 0.22);
+  --clipper-orb-stripe-small: hsl(var(--foreground) / 0.4);
 }
 
 html:not(.dark) .clipper-orb[data-small] .clipper-orb__glass {

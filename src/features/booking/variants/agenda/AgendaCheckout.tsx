@@ -6,13 +6,13 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { formatPhone } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
+import { InPlaceIdentity } from "../../flow/InPlaceIdentity";
 import { PaymentPanel, PayButton } from "../../flow/PaymentPanel";
 import { usePaymentController, type PaymentController } from "../../flow/usePaymentController";
 import { PickedProducts } from "../../flow/PickedProducts";
 import { ProductCatalogDrawer } from "../../flow/ProductCatalogDrawer";
 import { StepLayout } from "../../flow/StepLayout";
 import { useAsideFooter } from "../../flow/asideSlot";
-import { AgendaIdentity } from "./AgendaIdentity";
 
 /** Una parte del cierre: número, título y lo que va dentro. */
 export function CheckoutSection({ index, title, children }: { index: number; title: string; children: React.ReactNode }) {
@@ -35,7 +35,8 @@ export function CheckoutSection({ index, title, children }: { index: number; tit
 function WhoBooks() {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
-  if (!state.customer) return <AgendaIdentity />;
+  // El código se resuelve aquí mismo: la reserva no pasa a la pantalla «Escribe el código».
+  if (!state.customer || !state.verified) return <InPlaceIdentity />;
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3">
       <IconTile size="md" shape="circle" tone="positive" icon={<ThemaIcon name="check" />} />

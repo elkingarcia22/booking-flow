@@ -2666,7 +2666,7 @@ export const appEn: AppMessageCatalog = {
   "cfg.booking.widget": "Booking on your website",
   "cfg.booking.widgetHint": "Three ways to put booking on your page. If you do not manage your site's code, hand the snippet to whoever does.",
   "cfg.booking.widgetFloating": "Floating button",
-  "cfg.booking.widgetFloatingHint": "Adds a button at the bottom right; booking opens in a panel without leaving your page.",
+  "cfg.booking.widgetFloatingHint": "Adds a button at the bottom right; booking opens in a side panel that shifts your page to the left, without leaving it.",
   "cfg.booking.widgetTrigger": "From your own link",
   "cfg.booking.widgetTriggerHint": "No floating button: it opens from a link you already have. Replace #reservar with your link's id.",
   "cfg.booking.widgetInline": "Inside the page",

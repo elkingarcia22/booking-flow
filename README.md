@@ -12,7 +12,7 @@ npm run dev
 ```
 
 - `/`: la vista previa con los cuatro marcos y las tres experiencias.
-- `/reservar?embed=1`: la página pública, a pantalla completa (`&version=agenda-select` o `chat`).
+- `/reservar?embed=1`: la página pública, a pantalla completa (`&version=agenda-list` o `chat`).
 
 Es una demo sin servidor: los datos salen de un backend simulado (Mock Service Worker) que arranca
 siempre. Para probar: celular `320 217 2738` (cliente que vuelve) y código `246810`; el botón

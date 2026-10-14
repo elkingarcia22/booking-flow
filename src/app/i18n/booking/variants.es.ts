@@ -1,22 +1,26 @@
 /**
- * Las otras dos maneras de reservar (Agenda con selector y Conversación) y el
+ * Las otras dos maneras de reservar (Agenda y Conversación) y el
  * selector de versión de la vista previa. Mismo tono que la reserva: tú,
  * corto, sin jerga de la app.
  */
 export const bookingVariantsEs = {
   // ── Selector de versión (lo ve solo quien administra) ──
-  "booking.entry.coverLead": "Escribe tu celular y te mandamos un código.",
+  "booking.entry.coverLead": "Escribe tu celular para empezar tu reserva.",
   "booking.entry.branches": "Nuestras sedes",
+  "booking.entry.branch": "Nuestra sede",
+  "booking.entry.branchesWhere": "{count} sedes · {cities}",
+  "booking.entry.viewBranch": "Ver sede",
+  "booking.entry.viewBranches": "Ver sedes",
   "booking.entry.manageHint": "Cambiar o cancelar",
   "booking.entry.call": "Llamar",
   "booking.chat.trigger": "Agenda con {name}",
   "booking.version.label": "Versión de la experiencia",
   "booking.version.guided": "Paso a paso",
-  "booking.version.agendaSelect": "Agenda con selector",
   "booking.version.agendaList": "Agenda en lista",
+  "booking.version.mixed": "Según el cliente",
   "booking.version.chat": "Clipper",
 
-  // ── Agenda con selector ──
+  // ── Agenda ──
   "booking.agenda.whatSummary": "{minutes} min · desde {price}",
   "booking.agenda.usual": "Lo de siempre",
   "booking.agenda.whatPlaceholder": "Elige uno o varios servicios",
@@ -102,9 +106,10 @@ export const bookingVariantsEs = {
   "booking.agenda.heldTitle": "Ya tienes {count} cita lista",
   "booking.agenda.heldTitle_plural": "Ya tienes {count} citas listas",
   "booking.agenda.heldSee": "Ver",
+  "booking.agenda.heldBack": "Volver a confirmar sin agregar otra",
   "booking.agenda.heldLead": "Quedan guardadas mientras armas la otra. Las pagas juntas al final.",
   "booking.agenda.checkout.payLocked": "Confirma tu celular para pagar",
-  "booking.agenda.id.phoneHint": "Te mandamos un código por WhatsApp para confirmar que eres tú.",
+  "booking.agenda.id.phoneHint": "Te mandamos un código por mensaje de texto para confirmar que eres tú.",
   "booking.agenda.id.sendCode": "Enviar código",
   "booking.agenda.id.completeCta": "Completar mis datos",
   "booking.agenda.id.newLead": "Es tu primera vez aquí: cuéntanos cómo te llamas.",
@@ -141,7 +146,10 @@ export const bookingVariantsEs = {
   "booking.chat.hello": "¡Hola! Soy **Clipper**, el asistente de **{shop}**. Te ayudo a reservar tu cita en un minuto.",
   "booking.chat.helloLast": "¡Hola! Soy **Clipper**, el asistente de **{shop}**. Armemos tu cita; tus datos te los pido al final.",
   "booking.chat.phoneToFinish": "Ya casi: para reservarla necesito saber quién eres. Escríbeme tu **número de celular**, **solo los números**. Por ejemplo: 3001234567.",
-  "booking.chat.askPhone": "Primero necesito saber quién eres. Escríbeme tu **número de celular**, **solo los números**, sin espacios ni signos. Por ejemplo: 3001234567.",
+  "booking.chat.askPhone": "Para empezar escríbeme tu **número de celular**, **solo los números**, sin espacios ni signos. Por ejemplo: 3001234567.",
+  "booking.chat.codeOk": "¡Listo, confirmado!",
+  "booking.chat.waitlistNeedsPhone": "Para apuntarte en la lista de espera necesito tu **celular**, **solo los números**.",
+  "booking.chat.phoneSaved": "¡Anotado! Armemos tu cita. El código para confirmar que eres tú te lo pido al pagar.",
   "booking.chat.badPhone": "Mmm, ese número no se ve bien. Escríbelo con los **10 números**, sin espacios ni signos. Por ejemplo: 3001234567.",
   "booking.chat.needPhone": "Antes de seguir necesito tu **celular**. Escríbelo aquí abajo, **solo los números**.",
   "booking.chat.codeSms": "Listo. Te acabo de mandar un **código de 6 números** por mensaje de texto a {phone}. **Escríbelo aquí** para confirmar que eres tú.",
@@ -160,7 +168,6 @@ export const bookingVariantsEs = {
   "booking.chat.consentYes": "Sí, quiero recibirlas",
   "booking.chat.consentNo": "No, gracias",
   "booking.chat.niceToMeet": "¡Mucho gusto, {name}! Ya tienes tu ficha.",
-  "booking.chat.niceToMeetOffer": "¡Mucho gusto, {name}! Ya tienes tu ficha. Por ser tu primera visita tienes **{offer} de descuento**; se aplica solo al pagar.",
   "booking.chat.knownHello": "¡Hola, {name}!",
   "booking.chat.dueAsk": "¿Te agendamos tu **{service}** de siempre? Dime qué día y a qué hora te queda bien, o si prefieres otra cosa.",
   "booking.chat.homeTitle": "¿Qué hacemos hoy?",
@@ -204,7 +211,6 @@ export const bookingVariantsEs = {
   "booking.chat.barberConfirmYes": "Sí, con {name}",
   "booking.chat.barberCannot": "{name} no hace todo lo que elegiste. ¿Vemos a los demás?",
   "booking.chat.barberOthers": "Ver los otros barberos",
-  "booking.chat.theySay": "Lo que dicen sus clientes",
   "booking.chat.resume": "¿Seguimos donde íbamos?",
   "booking.chat.branchSwitchTitle": "¿Prefieres reservar en esta sede?",
   "booking.chat.branchStay": "No, sigo en mi sede",
