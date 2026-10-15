@@ -164,9 +164,9 @@ export function PaymentPanel({ payment, showOrder = true, compact = false, onCha
             <AlertTitle>{t("booking.payment.shopMulti.title", { count: state.items.length })}</AlertTitle>
             <AlertDescription>
               {t("booking.payment.shopMulti.short")}{" "}
-              <button type="button" className="font-medium underline underline-offset-2" onClick={() => payment.setShopNoticeOpen(true)}>
+              <Button type="button" variant="link" size="sm" className="h-auto p-0 align-baseline font-medium" onClick={() => payment.setShopNoticeOpen(true)}>
                 {t("booking.payment.shopMulti.more")}
-              </button>
+              </Button>
             </AlertDescription>
           </Alert>
         )}
@@ -303,9 +303,12 @@ function TipSheet({ payment }: { payment: PaymentController }) {
   const t = useAppT();
   const { state, shop, fmt, layout, touch } = useBookingFlow();
   const [tipId, setTipId] = React.useState<string>(state.tipId ?? NO_TIP);
-  React.useEffect(() => {
+  // Cada vez que la hoja se abre, parte de la propina que ya había (se ajusta al renderizar, sin efecto).
+  const [wasOpen, setWasOpen] = React.useState(payment.tipOpen);
+  if (payment.tipOpen !== wasOpen) {
+    setWasOpen(payment.tipOpen);
     if (payment.tipOpen) setTipId(state.tipId ?? NO_TIP);
-  }, [payment.tipOpen, state.tipId]);
+  }
   const options = [{ value: NO_TIP, label: t("booking.payment.tipNone") }, ...shop.tipOptions.map((option) => ({ value: option.id, label: option.type === "percent" ? `${option.value} %` : fmt.money(option.value) }))];
   const title = t("booking.payment.tip");
   const description = t("booking.payment.tipHint");

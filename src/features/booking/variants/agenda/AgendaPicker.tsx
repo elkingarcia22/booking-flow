@@ -7,14 +7,10 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon, type IconName } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
+import { SelectableRow } from "@/components/selection";
 import { BookingOverlay } from "../../flow/BookingOverlay";
 import { overlayKind } from "../../flow/drawerFit";
-
-/** ¿Las listas se abren en su sitio? Fuera del celular y el widget: debajo de su fila, en vez de en una hoja o un modal. */
-export function useInlineLists(): boolean {
-  const { layout, touch } = useBookingFlow();
-  return layout === "wide" || touch === "lg";
-}
+import { useInlineLists } from "./useInlineLists";
 
 /**
  * Las dos piezas de la Agenda: un campo que se lee como un select
@@ -252,12 +248,6 @@ function InlinePanel({ title, description, heading, footer, onClose, onShown, ch
   );
 }
 
-/** Desde cuántas opciones la lista lleva buscador. */
-export const PICKER_SEARCH_FROM = 7;
-
-/** Sin tildes ni mayúsculas, para buscar «andres» y encontrar «Andrés». */
-export const plainText = (value: string): string => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
 /** El buscador de arriba de una lista larga; se queda pegado al desplazar. */
 export function PickerSearch({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
@@ -286,57 +276,9 @@ interface PickerRowProps {
   children: React.ReactNode;
 }
 
-/** Una fila de la lista: foto, texto y la marca (casilla si se pueden varios, círculo si uno). */
-export function PickerRow({ role, checked, label, imageUrl, icon, round = false, onClick, action, below, children }: PickerRowProps) {
+/** Una fila de las hojas de la Agenda: la `SelectableRow` del sistema con la foto de la sede, el servicio o el barbero. */
+export function PickerRow({ imageUrl, icon, round = false, ...rest }: PickerRowProps) {
   const { touch } = useBookingFlow();
   const isLarge = touch === "lg";
-  const hasBelow = Boolean(action || below);
-  // El fondo (pasar el puntero, lo elegido) es de la tarjeta entera: con «Ver detalle» debajo, lo cubre también.
-  // `foreground/5` aclara en oscuro y oscurece en claro: `bg-muted` sobre el popover se veía como un hueco negro.
-  const surface = cn("rounded-xl transition-colors duration-fast hover:bg-foreground/5", checked && "bg-primary/10 hover:bg-primary/15");
-  const row = (
-    <button
-      type="button"
-      role={role}
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onClick}
-      className={cn(
-        "group/row flex w-full min-w-0 items-center gap-3 rounded-xl px-2 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        !hasBelow && surface,
-        !hasBelow && "active:bg-foreground/10",
-        isLarge ? "min-h-16 py-2.5" : "min-h-14 py-2",
-        hasBelow && "pb-1"
-      )}
-    >
-      <IconTile size={isLarge ? "lg" : "md"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
-      <span
-        aria-hidden
-        className={cn(
-          "flex size-6 shrink-0 items-center justify-center border transition-colors duration-fast",
-          role === "radio" ? "rounded-full" : "rounded-md",
-          checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background group-hover/row:border-primary/50"
-        )}
-      >
-        {checked && <ThemaIcon name="check" size="xs" tone="inverse" />}
-      </span>
-    </button>
-  );
-  if (!hasBelow) return row;
-  return (
-    <div className={surface}>
-      {row}
-      {/* Alineado con el texto de la fila (relleno + foto + hueco), debajo de él y no al lado: la fila conserva su ancho. */}
-      <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 pb-2 pr-2", isLarge ? "pl-[4.25rem]" : "pl-14")}>
-        {below}
-        {action && (
-          <Button type="button" variant="link" size="sm" onClick={action.onClick} aria-label={action.ariaLabel} className="h-auto gap-1 px-0 py-1 text-xs font-medium">
-            {action.label}
-            <ThemaIcon name="chevronRight" size="xs" data-icon="inline-end" />
-          </Button>
-        )}
-      </div>
-    </div>
-  );
+  return <SelectableRow {...rest} size={isLarge ? "lg" : "default"} leading={<IconTile size={isLarge ? "lg" : "md"} shape={round ? "circle" : "rounded"} src={imageUrl ?? undefined} icon={<ThemaIcon name={icon} />} />} />;
 }

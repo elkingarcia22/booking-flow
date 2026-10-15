@@ -5,6 +5,7 @@ import type { BookingAction, BookingState } from "../../bookingState";
 import { WEEK_ORDER, formatPhone, openStateOf, parseStart, type BookingFormatters } from "../../bookingFormat";
 import type { BookingBarber, BookingCatalog, BookingShop, BranchDetail } from "../../types";
 import { itemPrice } from "../../useBookingTotals";
+import { visitPartOf } from "../../visit";
 import { ableBarbers } from "../agenda/agendaModel";
 import { makeQuestion, type BookingQuestion, type QuestionEntry } from "./chatQuestions";
 import type { MessageInput } from "./chatKit";
@@ -84,7 +85,10 @@ export function useChatProfiles(kit: ProfilesKit) {
         image: barber.avatarUrl,
         description: [`★ ${barber.rating.toFixed(1)}`, fmt.money(itemPrice({ serviceIds: draft.serviceIds, barberId: barber.id }, catalogRef.current)), barber.id === usualId ? t("booking.agenda.yourBarber") : barber.level].filter(Boolean).join(" · "),
       })),
+      // Poco frecuente: cada servicio con su barbero u hora. Al final, para no estorbar a lo de siempre.
+      ...(draft.serviceIds.length > 1 && !draft.visitId ? [{ label: t("booking.chat.separateOption"), value: "separate", description: t("booking.chat.separateHint"), emoji: "🔀" }] : []),
     ];
+    const part = visitPartOf(stateRef.current);
     ask(
       makeQuestion("barber", t("booking.chat.barberTitle"), entries, {
         hint: t("booking.chat.barberHint"),
@@ -92,7 +96,7 @@ export function useChatProfiles(kit: ProfilesKit) {
         otherPlaceholder: t("booking.chat.barberKnowPlaceholder"),
         ...(able.length > 6 ? { searchPlaceholder: t("booking.chat.barberSearch") } : {}),
       }),
-      text ?? t("booking.chat.barberLead", { services: serviceNames(draft.serviceIds) })
+      text ?? (part ? t("booking.chat.partLead", { ...part, services: serviceNames(draft.serviceIds) }) : t("booking.chat.barberLead", { services: serviceNames(draft.serviceIds) }))
     );
   };
 

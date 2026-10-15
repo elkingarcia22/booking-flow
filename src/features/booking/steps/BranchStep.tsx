@@ -9,6 +9,7 @@ import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../flow/BookingContext";
 import { BranchProfileSheet } from "../flow/BranchProfileSheet";
+import { SelectMark } from "@/components/selection";
 import { StepLayout } from "../flow/StepLayout";
 
 /**
@@ -20,7 +21,7 @@ export function BranchStep() {
   const { shop, state, dispatch, fmt, layout } = useBookingFlow();
   const [viewing, setViewing] = React.useState<string | null>(null);
   return (
-    <StepLayout title={t("booking.branch.title")} lead={t("booking.branch.lead")}>
+    <StepLayout title={t("booking.branch.title")} lead={t("booking.branch.lead")} cover>
       {state.items.length > 0 && (
         <Alert variant="warning">
           <ThemaIcon name="warning" />
@@ -59,6 +60,7 @@ export function BranchStep() {
                 {t("booking.branch.barbers", { count: branch.barbers })}
               </Text>
             </span>
+            <SelectMark kind="radio" checked={branch.id === state.branchId} />
           </MagicCard>
           {/* El perfil es otro botón, fuera de la tarjeta (un botón no va dentro de otro), puesto bajo la
               cantidad de barberos: alineado con el texto (borde + relleno + foto + hueco). */}

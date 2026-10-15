@@ -3,11 +3,10 @@ import { useAppT } from "@/app/i18n";
 import { NumberField } from "@/components/forms";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { IconTile } from "@/components/utility/IconTile";
+import { ActionTile, IconTile } from "@/components/utility";
 import { ThemaIcon } from "@/icons";
 import { useBookingFlow } from "../../flow/BookingContext";
 import type { BookingProduct } from "../../types";
-import { ADD_CARD_CLASS, AddCardArrow } from "../../flow/AddCard";
 import { PickerOverlay, PickerRow } from "./AgendaPicker";
 
 const MAX_QTY = 9;
@@ -88,27 +87,22 @@ export function AgendaProductField({ labelledBy }: { labelledBy: string }) {
   return (
     <>
       {/* Igual que «Agregar otra cita»: algo que se suma, no un dato que falte. */}
-      <button
-        type="button"
+      <ActionTile
+        tone="accent"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-labelledby={labelledBy}
         aria-describedby={hintId}
         onClick={openPicker}
         data-testid="agenda-products-field"
-        className={ADD_CARD_CLASS}
-      >
-        <IconTile size="md" src={chosen[0]?.imageUrl} icon={<ThemaIcon name={chosen.length > 0 ? "layers" : "plus"} />} />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <Text as="span" weight="semibold" className="truncate">
-            {chosen.length > 0 ? names : t("booking.agenda.productsAdd")}
-          </Text>
-          <Text as="span" id={hintId} size="xs" tone="muted" tabular className="truncate">
+        leading={<IconTile size="md" src={chosen[0]?.imageUrl} icon={<ThemaIcon name={chosen.length > 0 ? "layers" : "plus"} />} />}
+        title={<span className="block truncate">{chosen.length > 0 ? names : t("booking.agenda.productsAdd")}</span>}
+        description={
+          <span id={hintId} className="block truncate tabular-nums">
             {chosen.length > 0 ? fmt.money(amountOf(state.products)) : t("booking.agenda.productsHint", { count: products.length })}
-          </Text>
-        </span>
-        <AddCardArrow />
-      </button>
+          </span>
+        }
+      />
       <PickerOverlay open={open} onOpenChange={setOpen} title={t("booking.agenda.productsTitle")} description={t("booking.agenda.productsLead")} footer={footer} focusRef={listRef}>
         {/* Por categoría, como la carta de servicios: el título de cada grupo y sus productos debajo. */}
         <div ref={listRef} className="flex flex-col gap-4 px-2 pb-3 pt-1">

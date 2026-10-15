@@ -20,6 +20,8 @@ export type QuestionKind =
   | "more"
   | "editPick"
   | "editWhat"
+  /** Cuál servicio de una cita va aparte (otra parte de la visita). */
+  | "splitWhich"
   | "products"
   | "tip"
   | "discount"

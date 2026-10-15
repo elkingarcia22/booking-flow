@@ -8,7 +8,7 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
-import { personName } from "../bookingState";
+import { personName, type DraftItem } from "../bookingState";
 import { parseStart } from "../bookingFormat";
 import { renderPolicy } from "../pricing";
 import { AppointmentCard } from "../flow/AppointmentCard";
@@ -19,8 +19,10 @@ import { PickedProducts } from "../flow/PickedProducts";
 import { ProductCatalogDrawer } from "../flow/ProductCatalogDrawer";
 import { PersonSheet } from "../flow/PersonPicker";
 import { AddCard } from "../flow/AddCard";
+import { VisitGroup } from "../flow/VisitGroup";
 import { StepLayout } from "../flow/StepLayout";
 import { itemDuration, itemPrice } from "../useBookingTotals";
+import { cartGroups } from "../visit";
 
 /**
  * El carrito: cada cita en su tarjeta (con cambiar y quitar), sumar otra
@@ -44,6 +46,55 @@ export function ReviewStep() {
     if (!item) return;
     dispatch({ type: "removeItem", index });
     toast(t("booking.review.removed"), { action: { label: t("booking.review.undo"), onClick: () => dispatch({ type: "restoreItem", index, item }) } });
+  };
+
+  const cardFor = (item: DraftItem, index: number) => {
+    const barber = catalog?.barbers.find((entry) => entry.id === item.barberId);
+    const relation = item.person.kind === "self" ? null : item.person.relation;
+    return (
+      <AppointmentCard
+        key={item.key}
+        data={{
+          personName: personName(item.person, state.customer),
+          relation,
+          services: item.serviceIds.map((id) => catalog?.services.find((service) => service.id === id)?.name ?? id),
+          barberName: barber?.name ?? t("booking.review.noPreference"),
+          barberAvatarUrl: barber?.avatarUrl,
+          day: item.start ? fmt.day(parseStart(item.start)) : "",
+          time: item.start ? fmt.time(parseStart(item.start)) : "",
+          duration: t("booking.review.minutes", { count: itemDuration(item.serviceIds, catalog) }),
+          price: fmt.money(itemPrice(item, catalog)),
+        }}
+        // Un servicio de la cita puede ir aparte: con otro barbero u otra hora, como otra parte de la visita.
+        onSplitService={(position) => dispatch({ type: "splitService", index, serviceId: item.serviceIds[position] })}
+        personAction={
+          // En celular solo el icono: con «Otra persona» al lado el nombre no cabía.
+          <Button
+            type="button"
+            variant="ghost"
+            size={layout === "wide" ? "sm" : "icon-sm"}
+            className={layout === "wide" ? "h-7 px-2 text-primary" : "text-primary"}
+            onClick={() => setPersonFor(index)}
+            aria-label={item.person.kind === "self" ? t("booking.person.add") : t("booking.person.change")}
+          >
+            <ThemaIcon name={item.person.kind === "self" ? "userAdd" : "edit"} />
+            {layout === "wide" && (item.person.kind === "self" ? t("booking.person.add") : t("booking.person.change"))}
+          </Button>
+        }
+        actions={
+          <>
+            <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "editItem", index })}>
+              <ThemaIcon name="edit" />
+              {t("booking.review.edit")}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} aria-label={t("booking.review.remove")}>
+              <ThemaIcon name="close" />
+              {layout === "wide" && t("booking.review.remove")}
+            </Button>
+          </>
+        }
+      />
+    );
   };
 
   if (state.items.length === 0) {
@@ -90,43 +141,15 @@ export function ReviewStep() {
       <BranchChange />
 
       <div className="flex flex-col gap-3">
-        {state.items.map((item, index) => {
-          const barber = catalog?.barbers.find((entry) => entry.id === item.barberId);
-          const relation = item.person.kind === "self" ? null : item.person.relation;
-          return (
-            <AppointmentCard
-              key={item.key}
-              data={{
-                personName: personName(item.person, state.customer),
-                relation,
-                services: item.serviceIds.map((id) => catalog?.services.find((service) => service.id === id)?.name ?? id),
-                barberName: barber?.name ?? t("booking.review.noPreference"),
-                barberAvatarUrl: barber?.avatarUrl,
-                day: item.start ? fmt.day(parseStart(item.start)) : "",
-                time: item.start ? fmt.time(parseStart(item.start)) : "",
-                duration: t("booking.review.minutes", { count: itemDuration(item.serviceIds, catalog) }),
-                price: fmt.money(itemPrice(item, catalog)),
-              }}
-              personAction={
-                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-primary" onClick={() => setPersonFor(index)}>
-                  {item.person.kind === "self" ? t("booking.person.add") : t("booking.person.change")}
-                </Button>
-              }
-              actions={
-                <>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "editItem", index })}>
-                    <ThemaIcon name="edit" />
-                    {t("booking.review.edit")}
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} aria-label={t("booking.review.remove")}>
-                    <ThemaIcon name="close" />
-                    {layout === "wide" && t("booking.review.remove")}
-                  </Button>
-                </>
-              }
-            />
-          );
-        })}
+        {cartGroups(state.items).map((group) =>
+          group.kind === "single" ? (
+            cardFor(group.item, group.index)
+          ) : (
+            <VisitGroup key={group.visitId} parts={group.parts.length} onJoin={() => dispatch({ type: "joinVisit", visitId: group.visitId })}>
+              {group.parts.map((part) => cardFor(part.item, part.index))}
+            </VisitGroup>
+          )
+        )}
         {/* La misma tarjeta que en la Agenda. */}
         <AddCard title={t("booking.review.addAnother")} hint={t("booking.review.addAnotherHint")} onClick={() => dispatch({ type: "addAnother", person: { kind: "self" } })} />
       </div>

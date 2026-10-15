@@ -60,11 +60,11 @@ export function WaitlistedStep({ onFinish }: { onFinish?: () => void }) {
           <ThemaIcon name="calendar" />
           {t("booking.waitlisted.more")}
         </Button>
-        {onFinish && (
-          <Button type="button" variant="ghost" onClick={onFinish}>
-            {t("booking.confirmed.done")}
-          </Button>
-        )}
+        {/* Salir: el widget se cierra; en la página, vuelve al inicio sin la sesión. */}
+        <Button type="button" variant="ghost" onClick={onFinish ?? (() => dispatch({ type: "restart" }))}>
+          <ThemaIcon name="logout" />
+          {t("booking.confirmed.done")}
+        </Button>
       </div>
     </div>
   );

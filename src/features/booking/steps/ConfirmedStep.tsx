@@ -62,11 +62,11 @@ export function ConfirmedStep({ onFinish }: { onFinish?: () => void }) {
         <Button type="button" variant="ghost" onClick={() => dispatch({ type: "openManage" })}>
           {t("booking.confirmed.manage")}
         </Button>
-        {onFinish && (
-          <Button type="button" variant="ghost" onClick={onFinish}>
-            {t("booking.confirmed.done")}
-          </Button>
-        )}
+        {/* Salir: el widget se cierra; en la página, vuelve al inicio sin la sesión. */}
+        <Button type="button" variant="ghost" onClick={onFinish ?? (() => dispatch({ type: "restart" }))}>
+          <ThemaIcon name="logout" />
+          {t("booking.confirmed.done")}
+        </Button>
       </div>
     </div>
   );

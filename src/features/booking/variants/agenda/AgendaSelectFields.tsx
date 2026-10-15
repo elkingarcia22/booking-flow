@@ -16,6 +16,8 @@ interface AgendaSelectFieldsProps {
   usualId: string | null;
   /** «Lo de siempre», si aplica: el atajo junto a los servicios. */
   onUsual?: () => void;
+  /** Lo que va pegado a Servicios, debajo (el «cada servicio con su barbero u hora»). */
+  afterServices?: React.ReactNode;
 }
 
 /** Una pregunta con su campo debajo: el mismo título para todas. */
@@ -46,7 +48,7 @@ function FieldSection({ id, label, aside, inline = false, className, children }:
  * Las preguntas de la Agenda, en filas y de a una: dónde, qué y con quién. Cada una es un campo
  * que abre su lista y aparece cuando la anterior ya tiene respuesta; las horas van aparte, debajo.
  */
-export function AgendaSelectFields({ barbers, usualId, onUsual }: AgendaSelectFieldsProps) {
+export function AgendaSelectFields({ barbers, usualId, onUsual, afterServices }: AgendaSelectFieldsProps) {
   const t = useAppT();
   const { shop, state } = useBookingFlow();
   const showServices = Boolean(state.branchId);
@@ -81,6 +83,7 @@ export function AgendaSelectFields({ barbers, usualId, onUsual }: AgendaSelectFi
           <AgendaServiceField labelledBy="agenda-what" eyebrow={t("booking.step.services")} onNeedBranch={needBranch} />
         </FieldSection>
       )}
+      {showServices && afterServices && <div className={cn("px-1 py-1", reveal)}>{afterServices}</div>}
       {showBarber && (
         <FieldSection id="agenda-who" label={t("booking.step.barber")} inline className={reveal}>
           <AgendaBarberField labelledBy="agenda-who" barbers={barbers} usualId={usualId} eyebrow={t("booking.step.barber")} onNeedBranch={needBranch} />

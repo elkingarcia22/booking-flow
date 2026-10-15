@@ -1,7 +1,6 @@
 import * as React from "react";
 import { useAppT } from "@/app/i18n";
-import { Text } from "@/components/typography";
-import { IconTile } from "@/components/utility/IconTile";
+import { ActionTile, IconTile } from "@/components/utility";
 import { ThemaIcon, type IconName } from "@/icons";
 import type { Reservation } from "../types";
 import { AppointmentDetailSheet } from "./AppointmentDetailSheet";
@@ -12,24 +11,9 @@ import { SendReceiptDialog } from "./SendReceiptDialog";
 
 type ActionId = "receipt" | "calendar" | "repeat" | "detail";
 
-function ActionTile({ icon, label, hint, onClick }: { icon: IconName; label: string; hint: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex flex-col items-start gap-2 rounded-2xl border border-border bg-surface p-3 text-left transition-colors hover:border-primary/50 hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <IconTile size="md" shape="circle" icon={<ThemaIcon name={icon} />} />
-      <span className="flex min-w-0 flex-col">
-        <Text size="sm" weight="semibold">
-          {label}
-        </Text>
-        <Text size="xs" tone="muted">
-          {hint}
-        </Text>
-      </span>
-    </button>
-  );
+/** Una acción de la cita confirmada: `ActionTile` apilada del sistema, con el icono en círculo. */
+function ConfirmedAction({ icon, label, hint, onClick }: { icon: IconName; label: string; hint: string; onClick: () => void }) {
+  return <ActionTile layout="stacked" leading={<IconTile size="md" shape="circle" icon={<ThemaIcon name={icon} />} />} title={label} description={hint} onClick={onClick} />;
 }
 
 /**
@@ -44,10 +28,10 @@ export function ConfirmedActions({ reservation }: { reservation: Reservation }) 
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        <ActionTile icon="mail" label={t("booking.confirmed.receipt")} hint={t("booking.confirmed.receiptHint")} onClick={() => setOpen("receipt")} />
-        <ActionTile icon="calendarAdd" label={t("booking.confirmed.calendar")} hint={t("booking.confirmed.calendarHint")} onClick={() => setOpen("calendar")} />
-        {state.token && <ActionTile icon="refresh" label={t("booking.confirmed.repeat")} hint={t("booking.confirmed.repeatHint")} onClick={() => setOpen("repeat")} />}
-        <ActionTile icon="info" label={t("booking.confirmed.detail")} hint={t("booking.confirmed.detailHint")} onClick={() => setOpen("detail")} />
+        <ConfirmedAction icon="mail" label={t("booking.confirmed.receipt")} hint={t("booking.confirmed.receiptHint")} onClick={() => setOpen("receipt")} />
+        <ConfirmedAction icon="calendarAdd" label={t("booking.confirmed.calendar")} hint={t("booking.confirmed.calendarHint")} onClick={() => setOpen("calendar")} />
+        {state.token && <ConfirmedAction icon="refresh" label={t("booking.confirmed.repeat")} hint={t("booking.confirmed.repeatHint")} onClick={() => setOpen("repeat")} />}
+        <ConfirmedAction icon="info" label={t("booking.confirmed.detail")} hint={t("booking.confirmed.detailHint")} onClick={() => setOpen("detail")} />
       </div>
 
       <SendReceiptDialog reservation={open === "receipt" ? reservation : null} onOpenChange={close} />

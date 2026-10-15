@@ -3,6 +3,8 @@ export { ResourceDayGrid, type ResourceDayGridProps } from "./ResourceDayGrid";
 export { ScheduleEventCard, ScheduleColorDot, ScheduleMarkers, type ScheduleEventCardProps } from "./ScheduleEventCard";
 export { MonthOccupancyGrid, type MonthOccupancyGridProps, type MonthOccupancyDay } from "./MonthOccupancyGrid";
 export { TimeSlotPicker, type TimeSlotPickerProps } from "./TimeSlotPicker";
+export { DayStrip, type DayStripProps } from "./DayStrip";
+export { TimeSlotGroups, type TimeSlotGroupsProps, type TimeSlotGroup, type TimeSlotOption } from "./TimeSlotGroups";
 export { ShiftWeekGrid, weekHours, type ShiftWeekGridProps, type ShiftRow, type ShiftDay } from "./ShiftWeekGrid";
 export { useScheduleDrag, type DragPreview, type DragMode } from "./useScheduleDrag";
 export type {

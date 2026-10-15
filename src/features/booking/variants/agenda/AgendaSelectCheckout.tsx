@@ -18,9 +18,11 @@ import { itemPrice } from "../../useBookingTotals";
 import { CheckoutFooter, CheckoutSection } from "./AgendaCheckout";
 import { AgendaProductField } from "./AgendaProductField";
 import { AddCard } from "../../flow/AddCard";
+import { VisitGroup } from "../../flow/VisitGroup";
+import { cartGroups } from "../../visit";
 
 /** La cita en una tarjeta: qué, cuándo, con quién y dónde, con su precio; y a nombre de quién va. */
-function AppointmentCard({ item }: { item: DraftItem }) {
+function AppointmentCard({ item, onSplit }: { item: DraftItem; /** Saca ese servicio a su propia parte de la visita. */ onSplit: (serviceId: string) => void }) {
   const t = useAppT();
   const { state, dispatch, shop, catalog, fmt } = useBookingFlow();
   const services = item.serviceIds.map((id) => catalog?.services.find((service) => service.id === id)).filter((service) => service !== undefined);
@@ -36,11 +38,13 @@ function AppointmentCard({ item }: { item: DraftItem }) {
   };
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-surface">
+      {/* Cuándo, con quién y cuánto arriba; con varios servicios, la lista debajo (cada uno con su «Separar»),
+          así el precio no compite con los enlaces. */}
       <div className="flex items-start gap-3 p-3">
         <IconTile size="lg" src={services[0]?.imageUrl} icon={<ThemaIcon name="scissors" />} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <Text weight="semibold" className="truncate">
-            {services.map((service) => service.name).join(" + ")}
+            {services.length > 1 ? t("booking.agenda.checkout.servicesCount", { count: services.length }) : services[0]?.name}
           </Text>
           {item.start && (
             <Text size="sm" tabular className="first-letter:uppercase">
@@ -51,10 +55,27 @@ function AppointmentCard({ item }: { item: DraftItem }) {
             {[barber?.name ?? t("booking.review.noPreference"), branch?.name].filter(Boolean).join(" · ")}
           </Text>
         </div>
-        <Text weight="semibold" tabular>
+        <Text weight="semibold" tabular className="shrink-0">
           {fmt.money(itemPrice(item, catalog))}
         </Text>
       </div>
+      {services.length > 1 && (
+        <ul className="flex flex-col divide-y divide-border border-t border-border px-3">
+          {services.map((service) => (
+            <li key={service.id} className="flex items-center gap-3 py-2">
+              <Text size="sm" className="min-w-0 flex-1 truncate">
+                {service.name}
+              </Text>
+              <Text size="xs" tone="muted" tabular className="shrink-0">
+                {t("booking.review.minutes", { count: service.durationMin })}
+              </Text>
+              <Button type="button" variant="link" size="sm" className="h-auto shrink-0 px-0" onClick={() => onSplit(service.id)} aria-label={t("booking.visit.splitAria", { service: service.name })}>
+                {t("booking.visit.split")}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex items-center gap-2 border-t border-border px-3 py-2">
         <ThemaIcon name="users" size="sm" tone="muted" />
         <Text size="sm" className="min-w-0 flex-1 truncate">
@@ -128,6 +149,10 @@ interface ReviewProps {
   onContinue: () => void;
   /** Volver a la agenda a elegir otra hora, sin soltar las de ahora. */
   onAddAnother: () => void;
+  /** Separar un servicio de su cita. Sin esto, abre su parte desde el barbero (Según el cliente). */
+  onSplit?: (index: number, serviceId: string) => void;
+  /** Juntar las partes de una visita. Sin esto, pide la hora en su paso (Según el cliente). */
+  onJoin?: (visitId: string) => void;
 }
 
 /**
@@ -136,18 +161,27 @@ interface ReviewProps {
  * aquí: el celular ya viene de la portada y el código se pide al pagar
  * (`AgendaSelectPay`), como en Paso a paso.
  */
-export function AgendaSelectCheckout({ onContinue, onAddAnother }: ReviewProps) {
+export function AgendaSelectCheckout({ onContinue, onAddAnother, onSplit, onJoin }: ReviewProps) {
   const t = useAppT();
-  const { state } = useBookingFlow();
+  const { state, dispatch } = useBookingFlow();
+  const split = onSplit ?? ((index: number, serviceId: string) => dispatch({ type: "splitService", index, serviceId }));
+  const join = onJoin ?? ((visitId: string) => dispatch({ type: "joinVisit", visitId }));
+  const cardFor = (item: DraftItem, index: number) => <AppointmentCard key={item.key} item={item} onSplit={(serviceId) => split(index, serviceId)} />;
   const { footer, portal } = useAsideFooter(<ContinueFooter onContinue={onContinue} />);
   let index = 0;
   const next = () => ++index;
   return (
     <StepLayout title={t("booking.agenda.checkout.title")} lead={t("booking.agenda.checkout.selectLead")} footer={footer}>
       <CheckoutSection index={next()} title={t(state.items.length > 1 ? "booking.agenda.checkout.appointments" : "booking.agenda.checkout.yourAppointment")}>
-        {state.items.map((item) => (
-          <AppointmentCard key={item.key} item={item} />
-        ))}
+        {cartGroups(state.items).map((group) =>
+          group.kind === "single" ? (
+            cardFor(group.item, group.index)
+          ) : (
+            <VisitGroup key={group.visitId} parts={group.parts.length} onJoin={() => join(group.visitId)}>
+              {group.parts.map((part) => cardFor(part.item, part.index))}
+            </VisitGroup>
+          )
+        )}
         <AddAnotherCard onClick={onAddAnother} />
       </CheckoutSection>
       <CheckoutSection index={next()} title={t("booking.agenda.checkout.products")}>

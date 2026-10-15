@@ -2,7 +2,7 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { IconTile } from "@/components/utility/IconTile";
+import { ActionTile, IconTile } from "@/components/utility";
 import { ThemaIcon } from "@/icons";
 import { clockMinutes } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
@@ -104,25 +104,21 @@ export function ShopBranchesCard() {
           <ul className="flex flex-col gap-2" aria-label={t("booking.entry.branches")}>
             {branches.map((branch) => (
               <li key={branch.id}>
-                <button
-                  type="button"
+                <ActionTile
                   onClick={() => setViewing(branch.id)}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-border p-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <IconTile size="lg" src={branch.imageUrl ?? undefined} icon={<ThemaIcon name="building" />} />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <Text as="span" size="sm" weight="medium" truncate>
-                      {branch.name}
-                    </Text>
-                    <Text as="span" size="xs" tone="secondary" truncate>
-                      {branch.address}, {branch.city}
-                    </Text>
-                    <Text as="span" size="xs" tone="muted" tabular truncate>
-                      {t("booking.branch.hours", { from: fmt.clock(branch.opensAt), to: fmt.clock(branch.closesAt) })} · {t("booking.branch.barbers", { count: branch.barbers })}
-                    </Text>
-                  </span>
-                  <ThemaIcon name="chevronRight" size="sm" tone="muted" className="shrink-0" />
-                </button>
+                  leading={<IconTile size="lg" src={branch.imageUrl ?? undefined} icon={<ThemaIcon name="building" />} />}
+                  title={<span className="block truncate">{branch.name}</span>}
+                  description={
+                    <>
+                      <span className="block truncate">
+                        {branch.address}, {branch.city}
+                      </span>
+                      <span className="block truncate tabular-nums">
+                        {t("booking.branch.hours", { from: fmt.clock(branch.opensAt), to: fmt.clock(branch.closesAt) })} · {t("booking.branch.barbers", { count: branch.barbers })}
+                      </span>
+                    </>
+                  }
+                />
               </li>
             ))}
           </ul>

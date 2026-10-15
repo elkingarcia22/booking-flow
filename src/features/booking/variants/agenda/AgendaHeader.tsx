@@ -14,6 +14,8 @@ interface AgendaHeaderProps {
   trailing?: React.ReactNode;
   /** «Agenda con Clipper» solo en la primera pantalla (la agenda), no ya en el cierre. */
   showChat?: boolean;
+  /** «Empezar de nuevo» mientras se arma la reserva (a la derecha, como en Paso a paso). */
+  onStartOver?: () => void;
 }
 
 /**
@@ -22,7 +24,7 @@ interface AgendaHeaderProps {
  * opciones» (regalos y paquetes): arriba solo queda lo de agendar. No cuenta
  * pasos: aquí no hay pasos.
  */
-export function AgendaHeader({ onBack, onSignIn, trailing, showChat = false }: AgendaHeaderProps) {
+export function AgendaHeader({ onBack, onSignIn, trailing, showChat = false, onStartOver }: AgendaHeaderProps) {
   const t = useAppT();
   const { shop, state, dispatch, layout, touch } = useBookingFlow();
   const isWide = layout === "wide";
@@ -43,6 +45,12 @@ export function AgendaHeader({ onBack, onSignIn, trailing, showChat = false }: A
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {showChat && <ChatTrigger full />}
+          {onStartOver && (
+            <Button type="button" variant="ghost" size={isWide ? "sm" : "icon-sm"} onClick={onStartOver} aria-label={t("booking.header.startOver")}>
+              <ThemaIcon name="refresh" />
+              {isWide && t("booking.header.startOver")}
+            </Button>
+          )}
           {/* Ya dentro, «Mis citas». «Entrar» solo si aún no dio su celular: la portada ya lo pide y el código va al pagar. */}
           {state.customer ? (
             <>

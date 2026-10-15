@@ -2,7 +2,7 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,11 @@ interface AppointmentCardProps {
   personAction?: React.ReactNode;
   /** Atenuada: cancelada o pasada. */
   muted?: boolean;
+  /**
+   * Con dos o más servicios, cada uno trae «Separar»: sale a una parte propia de la visita, con
+   * otro barbero u otra hora. Recibe la posición del servicio en `data.services`.
+   */
+  onSplitService?: (position: number) => void;
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -51,7 +56,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
  * filas con su etiqueta, qué se hace, para quién y con quién; abajo el precio
  * y lo que se puede hacer con ella.
  */
-export function AppointmentCard({ data, status, actions, personAction, muted = false }: AppointmentCardProps) {
+export function AppointmentCard({ data, status, actions, personAction, muted = false, onSplitService }: AppointmentCardProps) {
   const t = useAppT();
   return (
     <article className={cn("flex flex-col rounded-2xl border border-border bg-surface shadow-xs", muted && "opacity-60")}>
@@ -70,16 +75,36 @@ export function AppointmentCard({ data, status, actions, personAction, muted = f
 
       <dl className="flex flex-col gap-2.5 border-t border-border px-4 py-3">
         <DetailRow label={t("booking.card.services")}>
-          <Text size="sm" weight="medium">
-            {data.services.join(" + ")}
-          </Text>
+          {onSplitService && data.services.length > 1 ? (
+            <ul className="flex min-w-0 flex-1 flex-col gap-1">
+              {data.services.map((name, position) => (
+                <li key={name} className="flex items-center gap-2">
+                  <Text size="sm" weight="medium" className="min-w-0 flex-1" truncate>
+                    {name}
+                  </Text>
+                  <Button type="button" variant="link" size="sm" className="h-auto shrink-0 px-0" onClick={() => onSplitService(position)} aria-label={t("booking.visit.splitAria", { service: name })}>
+                    {t("booking.visit.split")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Text size="sm" weight="medium">
+              {data.services.join(" + ")}
+            </Text>
+          )}
         </DetailRow>
         <DetailRow label={t("booking.card.for")}>
-          <Text size="sm" truncate>
+          {/* Una sola línea: el nombre y, en gris, la relación; la acción a la derecha sin empujarlos. */}
+          <Text size="sm" className="min-w-0 flex-1" truncate>
             {data.personName}
+            {data.relation && (
+              <Text as="span" size="sm" tone="muted">
+                {` · ${data.relation}`}
+              </Text>
+            )}
           </Text>
-          {data.relation && <Badge variant="outline">{data.relation}</Badge>}
-          {personAction && <span className="-my-1 ml-auto shrink-0">{personAction}</span>}
+          {personAction && <span className="-my-1 shrink-0">{personAction}</span>}
         </DetailRow>
         <DetailRow label={t("booking.card.barber")}>
           {data.barberAvatarUrl || data.barberName ? (

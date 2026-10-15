@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { useBookingFlow } from "./BookingContext";
 
 const RING_START = 0.01;
+/** El contenido del paso entra con un fundido de 500 ms (`StepLayout`): el anillo se llena después, a la vista. */
+const RING_DELAY_MS = 500;
 
 /**
  * La membresía del cliente, en el pago: cada tantas visitas gana un servicio de cortesía. Enseña lo
@@ -20,8 +22,8 @@ export function MembershipPerk() {
   // El anillo se llena al aparecer: se nota qué suma esta cita sin tener que leerlo.
   const [isFilled, setIsFilled] = React.useState(false);
   React.useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setIsFilled(true));
-    return () => window.cancelAnimationFrame(frame);
+    const timer = window.setTimeout(() => setIsFilled(true), RING_DELAY_MS);
+    return () => window.clearTimeout(timer);
   }, []);
   if (!loyalty) return null;
   const reward = loyalty.rewardName || t("booking.loyalty.rewardFallback");
@@ -51,17 +53,20 @@ export function MembershipPerk() {
         // Arranca casi en cero (no en cero: el arco tiene que existir para que la transición se vea).
         value={isFilled ? (hasReward ? loyalty.every : loyalty.progress) : RING_START}
         pending={hasReward ? 0 : isFilled ? 1 : RING_START}
-        className="[&_circle]:duration-slow"
+        className="[&_circle]:[transition-duration:calc(var(--duration-slow)*2)]"
         max={loyalty.every}
         aria-label={hasReward ? t("booking.loyalty.ready", { reward }) : t("booking.loyalty.progress", { count: next, total: loyalty.every })}
       >
-        {hasReward ? (
-          <ThemaIcon name="award" size="xs" tone="primary" />
-        ) : (
-          <Text as="span" size="xs" weight="semibold" tabular>
-            {next}
-          </Text>
-        )}
+        {/* El centro aparece con el llenado: el premio o la visita que suma esta cita. */}
+        <span className={cn("flex", isFilled ? "motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:fade-in motion-safe:duration-slow" : "motion-safe:opacity-0")}>
+          {hasReward ? (
+            <ThemaIcon name="award" size="xs" tone="primary" />
+          ) : (
+            <Text as="span" size="xs" weight="semibold" tabular>
+              {next}
+            </Text>
+          )}
+        </span>
       </ProgressRing>
       <span className="flex min-w-0 flex-1 flex-col">
         <Text as="span" size="xs" weight="semibold" tone="primary" className="uppercase tracking-wide">

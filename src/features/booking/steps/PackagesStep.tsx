@@ -14,6 +14,8 @@ import { toastMissing } from "../flow/missingData";
 import { brandFromName, isCvcComplete, type CardValues } from "../flow/cardValidation";
 import { NewCardSheet } from "../flow/NewCardSheet";
 import { NEW_CARD, SavedCardPicker } from "../flow/SavedCardPicker";
+import { SelectMark } from "@/components/selection";
+import { MagicCard } from "@/components/ui/magic-card";
 import { StepLayout } from "../flow/StepLayout";
 import { useSavedCardManager } from "../flow/useSavedCardManager";
 import { useBuyPackageMutation } from "../queries";
@@ -152,16 +154,15 @@ function PackagesBody() {
             const saving = Math.max(0, offer.regular - offer.price);
             const selected = offer.id === packageId;
             return (
-              <button
+              <MagicCard
                 key={offer.id}
-                type="button"
                 role="radio"
                 aria-checked={selected}
+                aria-label={`${offer.name} · ${fmt.money(offer.price)}`}
+                isSelected={selected}
                 onClick={() => setPackageId(offer.id)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors duration-fast ease-out-expo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none",
-                  selected ? "border-primary bg-primary/5" : "border-border hover:bg-surface-subtle",
-                )}
+                className="w-full"
+                contentClassName="items-center gap-3 text-left"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <Text as="span" size="sm" weight="semibold">
@@ -177,7 +178,8 @@ function PackagesBody() {
                   </Text>
                   {saving > 0 && <Badge variant="secondary">{t("booking.packages.saving", { amount: fmt.money(saving) })}</Badge>}
                 </span>
-              </button>
+                <SelectMark kind="radio" checked={selected} />
+              </MagicCard>
             );
           })}
         </div>

@@ -115,6 +115,7 @@ export function usePaymentController() {
           serviceIds: item.serviceIds,
           barberId: item.barberId,
           start: item.start ?? "",
+          visitId: item.visitId,
         })),
         products: Object.entries(state.products).map(([productId, qty]) => ({ productId, qty })),
         tipId,

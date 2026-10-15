@@ -8,12 +8,17 @@ import { dayKeyOf, parseStart } from "../bookingFormat";
 import { useEarliestQuery } from "../queries";
 import { useBookingFlow } from "./BookingContext";
 
+interface EarliestSlotProps {
+  /** La hora se cruza con otra cita de la misma persona: no se propone. */
+  isBlocked?: (start: Date) => boolean;
+}
+
 /**
  * «Lo antes posible»: el primer hueco libre desde hoy, arriba de todo y en un toque, para quien
  * quiere cortarse ya (la barbería es de último minuto). Sin preferencia de barbero dice con
  * quién sería; si ya está elegida esa hora, no se repite.
  */
-export function EarliestSlot() {
+export function EarliestSlot({ isBlocked }: EarliestSlotProps = {}) {
   const t = useAppT();
   const { state, dispatch, catalog, fmt } = useBookingFlow();
   const draft = state.draft;
@@ -24,8 +29,8 @@ export function EarliestSlot() {
   if (!draft || !slot) return null;
 
   const start = `${slot.date}T${slot.time}`;
-  if (draft.start === start) return null;
   const when = parseStart(start);
+  if (draft.start === start || isBlocked?.(when)) return null;
   const isToday = slot.date === dayKeyOf(new Date());
   const day = isToday ? t("booking.earliest.today") : fmt.dayShort(when);
   const withName = draft.barberId ? null : catalog?.barbers.find((barber) => barber.id === slot.barberId)?.name.split(" ")[0];

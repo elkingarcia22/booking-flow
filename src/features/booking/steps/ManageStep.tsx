@@ -37,7 +37,7 @@ const STATUS_VARIANT = { scheduled: "secondary", completed: "outline", cancelled
  */
 export function ManageStep() {
   const t = useAppT();
-  const { state, dispatch, shop, fmt, token: sessionToken, setToken } = useBookingFlow();
+  const { state, dispatch, shop, fmt, token: sessionToken } = useBookingFlow();
   // Las citas solo con el código confirmado: la sesión de vista previa (reconocido por su celular) no alcanza.
   const token = state.verified ? sessionToken : null;
   const [tab, setTab] = React.useState<ManageTab>("upcoming");
@@ -135,7 +135,8 @@ export function ManageStep() {
       title={t("booking.manage.title")}
       lead={t("booking.manage.lead")}
       aside={
-        <Button type="button" variant="ghost" size="sm" onClick={() => setToken(null)}>
+        // Salir cierra la sesión y lleva al inicio: quedarse en «Mis citas» pidiendo el código no es salir.
+        <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "restart" })}>
           <ThemaIcon name="logout" />
           {t("booking.manage.logout")}
         </Button>

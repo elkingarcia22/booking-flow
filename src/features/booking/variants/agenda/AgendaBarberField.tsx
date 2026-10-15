@@ -7,7 +7,8 @@ import { useBookingFlow } from "../../flow/BookingContext";
 import { BarberAvatar, BarberProfileBody } from "../../flow/BarberProfileDrawer";
 import type { BookingBarber } from "../../types";
 import { itemPrice } from "../../useBookingTotals";
-import { PICKER_SEARCH_FROM, PickerField, PickerOverlay, PickerRow, PickerSearch, plainText } from "./AgendaPicker";
+import { PickerField, PickerOverlay, PickerRow, PickerSearch } from "./AgendaPicker";
+import { PICKER_SEARCH_FROM, plainText } from "./pickerSearch";
 
 interface AgendaBarberFieldProps {
   eyebrow?: string;

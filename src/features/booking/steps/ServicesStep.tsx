@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../flow/BookingContext";
 import { toastMissing } from "../flow/missingData";
 import { PersonPicker } from "../flow/PersonPicker";
+import { SelectMark } from "@/components/selection";
+import { SeparateServicesSwitch } from "../flow/SeparateServicesSwitch";
 import { StepLayout } from "../flow/StepLayout";
 import { fromPrice, itemDuration, itemPrice } from "../useBookingTotals";
 
@@ -41,42 +43,52 @@ export function ServicesStep() {
   // Tocó «Siguiente» sin elegir nada: la lista y el pie se marcan hasta que elija uno.
   const [triedNext, setTriedNext] = React.useState(false);
   const missingService = triedNext && selected.length === 0;
+  // Poco frecuente pero posible: cada servicio con su barbero u hora. Solo con dos o más, y no dentro de una parte.
+  const [isSeparate, setIsSeparate] = React.useState(false);
+  const canSeparate = selected.length > 1 && !state.draft?.visitId;
   const next = () => {
     setTriedNext(true);
     if (toastMissing(t, [selected.length === 0 && t("booking.services.pick")])) return;
-    dispatch({ type: "goTo", step: "barber" });
+    dispatch(canSeparate && isSeparate ? { type: "bookSeparately" } : { type: "goTo", step: "barber" });
   };
 
   return (
     <StepLayout
+      cover
       title={t("booking.services.title")}
-      lead={t("booking.services.lead")}
+      lead={canSeparate && isSeparate ? t("booking.visit.servicesLead") : t("booking.services.lead")}
       footer={
-        <div className="flex items-center gap-3">
-          <div className="flex min-w-0 flex-1 flex-col">
-            {selected.length > 0 ? (
-              <>
-                <Text size="xs" tone="muted">
-                  {t("booking.services.selected", { count: selected.length, minutes })}
+        <div className="flex flex-col gap-3">
+          {canSeparate && (
+            <SeparateServicesSwitch checked={isSeparate} onCheckedChange={setIsSeparate} count={selected.length} />
+          )}
+          <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 flex-col">
+              {selected.length > 0 ? (
+                <>
+                  <Text size="xs" tone="muted">
+                    {t("booking.services.selected", { count: selected.length, minutes })}
+                  </Text>
+                  <Text size="lg" weight="semibold" tabular>
+                    {fmt.money(itemPrice({ serviceIds: selected, barberId: state.draft?.barberId ?? null }, catalog))}
+                  </Text>
+                </>
+              ) : (
+                <Text size="sm" tone={missingService ? "negative" : "muted"} weight={missingService ? "medium" : undefined}>
+                  {t("booking.services.pick")}
                 </Text>
-                <Text size="lg" weight="semibold" tabular>
-                  {fmt.money(itemPrice({ serviceIds: selected, barberId: state.draft?.barberId ?? null }, catalog))}
-                </Text>
-              </>
-            ) : (
-              <Text size="sm" tone={missingService ? "negative" : "muted"} weight={missingService ? "medium" : undefined}>
-                {t("booking.services.pick")}
-              </Text>
-            )}
+              )}
+            </div>
+            <Button type="button" size="lg" onClick={next}>
+              {t("booking.services.next")}
+              <ThemaIcon name="arrowRight" />
+            </Button>
           </div>
-          <Button type="button" size="lg" onClick={next}>
-            {t("booking.services.next")}
-            <ThemaIcon name="arrowRight" />
-          </Button>
         </div>
       }
     >
-      <PersonPicker />
+      {/* Por separado, para quién se elige en cada parte (puede ser otra persona en cada una). */}
+      {!(canSeparate && isSeparate) && <PersonPicker />}
 
       <div className="flex flex-col gap-3">
         <div className="relative">
@@ -142,15 +154,7 @@ export function ServicesStep() {
                     {t("booking.services.minutes", { count: service.durationMin })} · <span className="font-medium text-text-primary">{t("booking.services.from", { price: fmt.money(fromPrice(service, catalog)) })}</span>
                   </Text>
                 </span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-fast",
-                    isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border text-text-muted"
-                  )}
-                >
-                  <ThemaIcon name={isSelected ? "check" : "plus"} size="xs" tone={isSelected ? "inverse" : "muted"} />
-                </span>
+                <SelectMark kind="checkbox" checked={isSelected} />
               </MagicCard>
             );
           })}

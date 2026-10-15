@@ -10,7 +10,8 @@ import { useBookingFlow } from "../../flow/BookingContext";
 import { toastMissing } from "../../flow/missingData";
 import type { BookingService } from "../../types";
 import { fromPrice, itemDuration, itemPrice } from "../../useBookingTotals";
-import { PICKER_SEARCH_FROM, PickerField, PickerOverlay, PickerRow, PickerSearch, plainText as plain } from "./AgendaPicker";
+import { PickerField, PickerOverlay, PickerRow, PickerSearch } from "./AgendaPicker";
+import { PICKER_SEARCH_FROM, plainText as plain } from "./pickerSearch";
 
 /** Cuántos nombres caben en el campo antes de resumir con «y N más». */
 const NAMES_SHOWN = 2;

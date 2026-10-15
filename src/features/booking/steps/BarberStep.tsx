@@ -11,7 +11,9 @@ import { cn } from "@/lib/utils";
 import { initialsOf } from "../bookingFormat";
 import { useBookingFlow } from "../flow/BookingContext";
 import { BarberProfileDrawer } from "../flow/BarberProfileDrawer";
+import { SelectMark } from "@/components/selection";
 import { StepLayout } from "../flow/StepLayout";
+import { VisitPartNote } from "../flow/VisitPartNote";
 import type { BookingBarber } from "../types";
 import { itemPrice } from "../useBookingTotals";
 
@@ -31,9 +33,13 @@ export function BarberStep() {
     // El de la última vez va primero: es a quien la mayoría vuelve.
     .sort((a, b) => Number(b.id === lastBarberId) - Number(a.id === lastBarberId));
   const choose = (barberId: string | null) => dispatch({ type: "chooseBarber", barberId });
+  // «Sin preferencia» solo cuenta como elegida cuando ya se eligió con quién (el borrador arranca sin barbero).
+  const isAny = Boolean(state.draft?.barberChosen) && state.draft?.barberId === null;
 
   return (
-    <StepLayout title={t("booking.barber.title")} lead={t("booking.barber.lead")}>
+    <StepLayout title={t("booking.barber.title")} lead={t("booking.barber.lead")} cover>
+      {/* Cada parte de una visita: cuál es y, aquí mismo, para quién (puede ser otra persona). */}
+      <VisitPartNote withPerson showDone />
       {able.length === 0 ? (
         <Alert variant="warning">
           <ThemaIcon name="warning" />
@@ -42,22 +48,23 @@ export function BarberStep() {
       ) : (
         <div role="radiogroup" aria-label={t("booking.barber.title")} className={cn("grid grid-cols-1 gap-3", layout === "wide" && "lg:grid-cols-2")}>
           {able.length > 1 && (
-            <MagicCard role="radio" aria-label={t("booking.barber.any")} aria-checked={false} isSelected={false} onClick={() => choose(null)} className="w-full" contentClassName="items-center gap-3 text-left">
+            <MagicCard role="radio" aria-label={t("booking.barber.any")} aria-checked={isAny} isSelected={isAny} onClick={() => choose(null)} className="w-full" contentClassName="items-center gap-3 text-left">
               <IconTile size="lg" shape="circle" icon={<ThemaIcon name="users" />} />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <Text weight="semibold">{t("booking.barber.any")}</Text>
                 <Text size="xs" tone="secondary">
                   {t("booking.barber.anyLead")}
                 </Text>
+                <Text size="sm" weight="medium" tabular as="span">
+                  {t("booking.services.from", { price: fmt.money(itemPrice({ serviceIds, barberId: null }, catalog)) })}
+                </Text>
               </span>
-              <Text size="sm" weight="medium" tabular as="span">
-                {t("booking.services.from", { price: fmt.money(itemPrice({ serviceIds, barberId: null }, catalog)) })}
-              </Text>
+              <SelectMark kind="radio" checked={isAny} />
             </MagicCard>
           )}
           {able.map((barber) => (
             <div key={barber.id} className="relative">
-              <MagicCard role="radio" aria-label={barber.name} aria-checked={state.draft?.barberId === barber.id} isSelected={state.draft?.barberId === barber.id} onClick={() => choose(barber.id)} className="w-full" contentClassName="items-center gap-3 pr-32 text-left">
+              <MagicCard role="radio" aria-label={barber.name} aria-checked={state.draft?.barberId === barber.id} isSelected={state.draft?.barberId === barber.id} onClick={() => choose(barber.id)} className="w-full" contentClassName="items-start gap-3 pb-9 text-left">
                 <Avatar size="lg">
                   {barber.avatarUrl && <AvatarImage src={barber.avatarUrl} alt="" />}
                   <AvatarFallback>{initialsOf(barber.name)}</AvatarFallback>
@@ -78,14 +85,15 @@ export function BarberStep() {
                     {fmt.money(itemPrice({ serviceIds, barberId: barber.id }, catalog))}
                   </Text>
                 </span>
+                <SelectMark kind="radio" checked={state.draft?.barberId === barber.id} />
               </MagicCard>
-              {/* El perfil es otro botón, fuera de la tarjeta (un botón no va dentro de otro). Ocupa todo el
-                  alto del lado derecho, sin línea ni caja: se acierta con el dedo sin elegir al barbero por error. */}
+              {/* El perfil es otro botón, fuera de la tarjeta (un botón no va dentro de otro), puesto bajo el precio y
+                  alineado con el texto (borde + relleno + foto + hueco): igual que el de la sede. */}
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute inset-y-[1.5px] right-[1.5px] z-raised h-auto rounded-l-none rounded-r-[11px] px-4 text-primary hover:bg-primary/5 hover:text-primary"
+                className="absolute bottom-3 left-[calc(4.25rem+1.5px)] z-raised -translate-x-2.5 text-primary hover:text-primary"
                 onClick={() => setProfile(barber)}
                 aria-label={`${t("booking.barber.profile")}: ${barber.name}`}
               >

@@ -4,7 +4,7 @@ import { useAppT } from "@/app/i18n";
 import { SegmentedControl } from "@/components/selection";
 import { Heading, Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { IconTile } from "@/components/utility/IconTile";
+import { ActionTile, IconTile } from "@/components/utility";
 import { ThemaIcon } from "@/icons";
 import { clockMinutes, dayKeyOf } from "../bookingFormat";
 import { useJoinWaitlistMutation, useLeaveWaitlistMutation } from "../queries";
@@ -87,23 +87,14 @@ export function WaitlistCard({ day, hasSlots = false, defaultOpen = false }: Wai
 
   if (hasSlots && !isOpen) {
     return (
-      <button
-        type="button"
+      <ActionTile
+        tone="dashed"
         onClick={() => setIsOpen(true)}
         aria-expanded={false}
-        className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-border p-3 text-left transition-colors duration-fast ease-out-expo hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none"
-      >
-        <IconTile size="md" shape="circle" icon={<ThemaIcon name="notification" />} />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <Text as="span" size="sm" weight="medium">
-            {t("booking.waitlist.prompt")}
-          </Text>
-          <Text as="span" size="xs" tone="secondary">
-            {t("booking.waitlist.promptHint")}
-          </Text>
-        </span>
-        <ThemaIcon name="chevronRight" size="sm" tone="muted" />
-      </button>
+        leading={<IconTile size="md" shape="circle" icon={<ThemaIcon name="notification" />} />}
+        title={t("booking.waitlist.prompt")}
+        description={t("booking.waitlist.promptHint")}
+      />
     );
   }
 

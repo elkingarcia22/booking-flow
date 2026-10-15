@@ -11,6 +11,8 @@ import { brandFromName, isCvcComplete } from "../../flow/cardValidation";
 import type { PaymentController } from "../../flow/usePaymentController";
 import type { Totals } from "../../pricing";
 import { bookingKeys } from "../../queries";
+import { itemDuration } from "../../useBookingTotals";
+import { busyRanges, overlapsBusy } from "../../visit";
 import type { Availability, BookedAppointment, BookingBarber, BookingCatalog, Slot, VisitSuggestion } from "../../types";
 import type { DayWindow } from "../agenda/agendaModel";
 import { EMPTY_CARD, isCardStep, maskCardInput, useChatNewCard, type CardDraft } from "./chatCard";
@@ -283,7 +285,11 @@ export function useChatBooking({
         .catch(() => ({ date, slots: [] }))
     );
     const day = fmt.dayLong(parseStart(`${date}T00:00`));
-    const slots = availability.slots;
+    // Una misma persona no está en dos sillas: las horas que se cruzan con otra cita suya no se ofrecen.
+    const draft = stateRef.current.draft;
+    const busyFor = !rescheduling.current && draft ? busyRanges(stateRef.current.items, draft, stateRef.current.editingIndex, (item) => itemDuration(item.serviceIds, catalogRef.current)) : [];
+    const minutes = itemDuration(goal.serviceIds, catalogRef.current);
+    const slots = availability.slots.filter((slot) => !overlapsBusy(parseStart(`${date}T${slot.time}`), minutes, busyFor));
     if (slots.length === 0) {
       // Sin horas con su barbero: primero otros que hacen lo mismo y sí tienen; después, el resto de opciones.
       const name = goal.barberId ? firstName(barberName(goal.barberId)) : "";
@@ -342,13 +348,42 @@ export function useChatBooking({
     );
 
   const askEditWhat = (index: number) => {
+    const item = stateRef.current.items[index];
     const question = makeQuestion("editWhat", t("booking.chat.editWhatTitle"), [
       { label: t("booking.chat.editTime"), value: "time", emoji: "🕒" },
       { label: t("booking.chat.editBarber"), value: "barber", emoji: "💈" },
       { label: t("booking.chat.editServices"), value: "services", emoji: "✂️" },
+      ...((item?.serviceIds.length ?? 0) > 1 ? [{ label: t("booking.chat.editSplit"), value: "split", description: t("booking.chat.separateHint"), emoji: "🔀" }] : []),
       { label: t("booking.chat.editRemove"), value: "remove", emoji: "🗑️" },
     ]);
     ask({ ...question, values: { ...question.values, __index: String(index) } });
+  };
+
+  /** Cuál de los servicios de una cita va aparte: sale a su propia parte y se elige con quién. */
+  const askSplitWhich = (index: number) => {
+    const item = stateRef.current.items[index];
+    if (!item) return;
+    const question = makeQuestion(
+      "splitWhich",
+      t("booking.chat.splitWhichTitle"),
+      item.serviceIds.map((id) => ({ label: serviceNames([id]), value: id }))
+    );
+    ask({ ...question, values: { ...question.values, __index: String(index) } });
+  };
+
+  /** «Cada servicio con alguien distinto» con la cita en curso; o, ya apartada, cuál de sus servicios va aparte. */
+  const separate = (): boolean => {
+    const current = stateRef.current;
+    const draft = current.draft;
+    if (draft && draft.serviceIds.length > 1 && !draft.visitId) {
+      apply({ type: "bookSeparately" });
+      askBarber(t("booking.chat.separateStart", { service: serviceNames(stateRef.current.draft?.serviceIds ?? []) }));
+      return true;
+    }
+    const index = current.items.findLastIndex((item) => item.serviceIds.length > 1);
+    if (index < 0) return false;
+    askSplitWhich(index);
+    return true;
   };
 
   const commitTime = async (start: string, lead?: string) => {
@@ -358,6 +393,9 @@ export function useChatBooking({
       const current = stateRef.current;
       const cached = current.branchId && current.draft ? queryClient.getQueryData<Availability>(bookingKeys.availability(current.branchId, start.slice(0, 10), current.draft.serviceIds, null)) : undefined;
       apply({ type: "chooseTime", start, assignedBarberId: cached?.slots.find((slot) => slot.time === start.slice(11, 16))?.barberIds[0] ?? null });
+      // Por separado: queda otra parte de la visita por armar, y se sigue con ella.
+      const nextPart = stateRef.current.draft;
+      if (nextPart?.visitId) return askBarber([lead, heldText(), t("booking.chat.separateNext", { service: serviceNames(nextPart.serviceIds) })].filter(Boolean).join(" "));
       return askMore([lead, heldText()].filter(Boolean).join(" "));
     }
     const token = stateRef.current.token;
@@ -499,7 +537,7 @@ export function useChatBooking({
     ask({ ...previous, answer: undefined }, lead);
     return true;
   };
-  const intents = useChatIntents({ t, fmt, shop, apply, say, stateRef, catalogRef, totalsRef, serviceNames, barberName, askServices, askBarber, askDay, askBranch, showBarber: profiles.showBarber, showBranch: profiles.showBranch, call: () => call(), info, manage, resume, back, canBook });
+  const intents = useChatIntents({ t, fmt, shop, apply, say, stateRef, catalogRef, totalsRef, serviceNames, barberName, askServices, askBarber, askDay, askBranch, showBarber: profiles.showBarber, showBranch: profiles.showBranch, call: () => call(), info, manage, resume, back, canBook, separate });
 
   /* ───────────────────────────── al saludar ───────────────────────────── */
 
@@ -639,6 +677,7 @@ export function useChatBooking({
 
   const handle = async (question: BookingQuestion, label: string, isOther: boolean) => {
     const value = isOther ? null : (question.values[label] ?? null);
+    if (question.kind === "barber" && value === "separate") return void separate();
     if (await pay.answerCheckout(question, value, label, isOther)) return;
     if (await profiles.answerProfile(question, value, label, isOther)) return;
     if (newCard.answerCard(question, value)) return;
@@ -714,10 +753,16 @@ export function useChatBooking({
           apply({ type: "removeItem", index });
           return stateRef.current.items.length === 0 ? startBooking(t("booking.chat.removedAll")) : askMore(t("booking.chat.removed"));
         }
+        if (value === "split") return askSplitWhich(index);
         apply({ type: "editItem", index });
         if (value === "services") return askServices(t("booking.chat.editing"));
         if (value === "barber") return askBarber();
         return askDay();
+      }
+      case "splitWhich": {
+        if (!value) return askMore();
+        apply({ type: "splitService", index: Number(question.values.__index ?? "0"), serviceId: value });
+        return askBarber(t("booking.chat.separateNext", { service: serviceNames([value]) }));
       }
       case "products":
         return extras.answerProducts(question, label);

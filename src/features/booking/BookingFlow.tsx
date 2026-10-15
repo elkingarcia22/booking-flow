@@ -6,10 +6,11 @@ import { ErrorState } from "@/lib/query";
 import { PortalContainerProvider } from "@/components/ui/portal-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { defaultBranchId, type BookingAction, type BookingState } from "./bookingState";
+import { defaultBranchId, previousPartIndex, type BookingAction, type BookingState } from "./bookingState";
 import { BookingFlowProvider, useBookingFlow, type BookingLayout } from "./flow/BookingContext";
 import { BookingHeader } from "./flow/BookingHeader";
 import { BookingSummaryAside } from "./flow/BookingSummaryAside";
+import { BookingSkinContext } from "./flow/bookingSkin";
 import { AsideSlotProvider } from "./flow/asideSlot";
 import { BOOKING_TOASTER_ID } from "./flow/bookingToast";
 import { ReservedHairBurst } from "./flow/ReservedHairBurst";
@@ -82,7 +83,8 @@ function backAction(state: BookingState, shop: BookingShop): BookingAction | nul
       // Con la sede ya dada (única, o la de siempre del cliente) no hay paso de sede al que volver.
       return defaultBranchId(state.customer, shop.branches.map((branch) => branch.id)) === null ? { type: "goTo", step: "branch" } : identity;
     case "barber":
-      return { type: "goTo", step: "services" };
+      // Parte por parte: «Atrás» reabre la parte anterior para corregirla, no los servicios.
+      return previousPartIndex(state) >= 0 ? { type: "previousPart" } : { type: "goTo", step: "services" };
     case "time":
       return { type: "goTo", step: "barber" };
     case "review":
@@ -161,7 +163,9 @@ function GuidedFlow({ headerTrailing, onFinish, agendaCheckout = false }: Pick<B
   const showAside = layout === "wide" && ["branch", "services", "barber", "time", "review", "payment"].includes(state.step);
 
   return (
-    // El resumen ocupa todo el alto, de arriba abajo: la cabecera llega hasta él.
+    // «Según el cliente» (`agendaCheckout`) pinta estos pasos con la cara de la Agenda.
+    <BookingSkinContext.Provider value={agendaCheckout ? "agenda" : "guided"}>
+    {/* El resumen ocupa todo el alto, de arriba abajo: la cabecera llega hasta él. */}
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* El inicio no lleva cabecera: la marca ya está en su tarjeta. El widget la conserva por su botón de cerrar. */}
@@ -181,6 +185,7 @@ function GuidedFlow({ headerTrailing, onFinish, agendaCheckout = false }: Pick<B
         </div>
       )}
     </div>
+    </BookingSkinContext.Provider>
   );
 }
 

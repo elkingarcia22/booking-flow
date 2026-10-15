@@ -386,6 +386,8 @@ export interface ReservationItemInput {
   barberId: string | null;
   /** «AAAA-MM-DDTHH:mm». */
   start: string;
+  /** Las partes de una misma visita comparten este id: el servidor las anota juntas en la agenda. */
+  visitId?: string;
 }
 
 /** Quien reserva es el de la sesión (`x-booking-token`), no un id del navegador. */

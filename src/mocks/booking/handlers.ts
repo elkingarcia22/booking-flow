@@ -169,12 +169,16 @@ interface PlannedItem {
   time: string;
   durationMin: number;
   price: number;
+  /** Las partes de una misma visita (un servicio separado para otro barbero u otra hora). */
+  visitId: string | null;
 }
 
 /** Comprueba cada cita y, sin preferencia, le asigna el primer barbero libre (en el orden del calendario). */
 function planItems(branchId: string, items: unknown[], client: MockClient): { planned: PlannedItem[] } | { problem: string } {
   const planned: PlannedItem[] = [];
   const taken: { barberId: string; day: string; start: number; end: number }[] = [];
+  // Una misma persona (el cliente o cada invitado) no puede estar en dos citas a la vez.
+  const sitting: { person: string; day: string; start: number; end: number }[] = [];
   const minNotice = bookingRules().minNoticeMinutes;
   for (const raw of items) {
     const item = asRecord(raw as DefaultBodyType);
@@ -193,10 +197,15 @@ function planItems(branchId: string, items: unknown[], client: MockClient): { pl
     const candidates = bookableBarbers(branchId).filter((barber) => (wanted ? barber.id === wanted : true) && serviceIds.every((id) => barberPrice(barber.id, id) !== null));
     const chosen = candidates.find((barber) => !overlapsTaken(barber.id) && barberFree(branchId, barber.id, day, minute, durationMin));
     if (!chosen) return { problem: wanted ? "El barbero no está disponible a esa hora. Por favor elige otra." : "Ese horario acaba de ser tomado. Por favor elige otro." };
-    taken.push({ barberId: chosen.id, day, start: minute, end: minute + durationMin });
     const guestId = text(item.guestId);
     const guest = guestId ? profileOf(client).guests.find((entry) => entry.id === guestId) : undefined;
     const guestName = guest?.name ?? (text(item.guestName) || null);
+    const person = guestId ? `guest:${guestId}` : guestName ? `new:${guestName.toLowerCase()}` : "self";
+    if (sitting.some((slot) => slot.person === person && slot.day === day && minute < slot.end && slot.start < minute + durationMin)) {
+      return { problem: "Una misma persona no puede tener dos citas a la misma hora. Cambia la hora de una de ellas." };
+    }
+    sitting.push({ person, day, start: minute, end: minute + durationMin });
+    taken.push({ barberId: chosen.id, day, start: minute, end: minute + durationMin });
     planned.push({
       guestName,
       guestRelation: guest?.relation ?? (guestName ? text(item.guestRelation) || null : null),
@@ -207,6 +216,7 @@ function planItems(branchId: string, items: unknown[], client: MockClient): { pl
       time,
       durationMin,
       price: serviceIds.reduce((sum, id) => sum + (barberPrice(chosen.id, id) ?? 0), 0),
+      visitId: text(item.visitId) || null,
     });
   }
   return { planned };
@@ -471,6 +481,8 @@ export const bookingHandlers = [
     if (badPhoto) return error(422, "validation", "La foto no se pudo subir. Prueba con otra.", { fields: { referencePhotos: ["La foto no se pudo subir. Prueba con otra."] } });
     // Varias citas en un solo agendamiento quedan enlazadas en la agenda.
     const linkId = plan.planned.length > 1 ? `lnk_${reservationId}` : null;
+    // Las partes de una visita llevan su nota: en la agenda se ve que es la misma persona en dos sillas.
+    const partsOf = (visitId: string | null) => (visitId ? plan.planned.filter((other) => other.visitId === visitId).length : 0);
     const created: MockAppointment[] = plan.planned.map((item, index) => ({
       id: `apt_web_${Date.now().toString(36)}_${index}`,
       linkId,
@@ -488,7 +500,7 @@ export const bookingHandlers = [
       source: "online",
       repeat: "none",
       seriesId: null,
-      notes: [item.guestName ? `Para ${item.guestName}${item.guestRelation ? ` (${item.guestRelation})` : ""}` : null, notes, referencePhotos.length > 0 ? "Trae foto de referencia" : null].filter(Boolean).join(" · ") || null,
+      notes: [item.guestName ? `Para ${item.guestName}${item.guestRelation ? ` (${item.guestRelation})` : ""}` : null, partsOf(item.visitId) > 1 ? `Visita en ${partsOf(item.visitId)} partes` : null, notes, referencePhotos.length > 0 ? "Trae foto de referencia" : null].filter(Boolean).join(" · ") || null,
       referencePhotos,
       createdAt: new Date().toISOString(),
       createdBy: "Reserva en línea",

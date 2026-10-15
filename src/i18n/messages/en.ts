@@ -284,6 +284,7 @@ export const en: MessageCatalog = {
   "schedule.afternoon": "Afternoon",
   "schedule.evening": "Evening",
   "schedule.pickDay": "Pick the day",
+  "schedule.today": "Today",
   "schedule.pickTime": "Pick the time",
   "schedule.noSlots": "No available times in this range.",
   "schedule.team": "Team",

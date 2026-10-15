@@ -1,42 +1,47 @@
 import * as React from "react";
-import { addDays } from "date-fns";
-import { useAppT } from "@/app/i18n";
+import { addDays, format, isSameDay, startOfDay } from "date-fns";
 import { Text } from "@/components/typography";
 import { useDragScroll } from "@/hooks/useDragScroll";
-import { useLocale } from "@/i18n";
+import { useLocale, useT } from "@/i18n";
 import { cn } from "@/lib/utils";
-import { dayKeyOf, isSameDayAs } from "../../bookingFormat";
 
-interface DayStripProps {
+export interface DayStripProps {
   /** El primer día que se ofrece (hoy, o mañana si hoy ya cerró). */
   first: Date;
+  /** Cuántos días hacia delante. */
   count: number;
   value: Date;
   onChange: (day: Date) => void;
-  /** Días con citas en el carrito: llevan un punto. */
+  /** Días (`AAAA-MM-DD`) que llevan un punto: con citas, con algo pendiente. */
   marked?: ReadonlySet<string>;
+  /** `lg` agranda cada día para el dedo: tablet o kiosco. */
   size?: "default" | "lg";
+  /** Lo que lee el lector de pantalla para el grupo; por defecto, «Elige el día». */
+  ariaLabel?: string;
+  className?: string;
 }
 
+const dayKey = (day: Date): string => format(day, "yyyy-MM-dd");
+
 /**
- * La tira de días de la agenda: el día de la semana arriba y el número grande,
- * en fila y deslizable. Lo que se toca aquí cambia todo el tablero de horas.
+ * La tira de días: el día de la semana arriba y el número grande, en fila y deslizable (con el dedo,
+ * arrastrando con el ratón o con la rueda). El de hoy se llama «Hoy». Lo que se toca aquí cambia todo
+ * lo de debajo —las horas libres de ese día—.
  */
-export function DayStrip({ first, count, value, onChange, marked, size = "default" }: DayStripProps) {
-  const t = useAppT();
+export function DayStrip({ first, count, value, onChange, marked, size = "default", ariaLabel, className }: DayStripProps) {
+  const t = useT();
   const { formatDate } = useLocale();
-  const row = useDragScroll<HTMLDivElement>({ follow: dayKeyOf(value) });
-  const days = React.useMemo(() => Array.from({ length: count }, (_, index) => addDays(first, index)), [first, count]);
+  const row = useDragScroll<HTMLDivElement>({ follow: dayKey(value) });
+  const days = React.useMemo(() => Array.from({ length: count }, (_, index) => addDays(startOfDay(first), index)), [first, count]);
   const today = new Date();
 
   return (
-    <div ref={row} role="radiogroup" aria-label={t("booking.agenda.dayLabel")} className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={row} role="radiogroup" aria-label={ariaLabel ?? t("schedule.pickDay")} data-slot="day-strip" className={cn("-mx-1 flex gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}>
       {days.map((day) => {
-        const selected = isSameDayAs(day, value);
-        const isToday = isSameDayAs(day, today);
+        const selected = isSameDay(day, value);
         return (
           <button
-            key={dayKeyOf(day)}
+            key={dayKey(day)}
             type="button"
             role="radio"
             aria-checked={selected}
@@ -51,12 +56,12 @@ export function DayStrip({ first, count, value, onChange, marked, size = "defaul
           >
             {/* Sobre el color principal va su propio texto (`primary-foreground`), no el «inverso»: así contrasta en todo tema. */}
             <Text as="span" size="xs" weight="medium" tone={selected ? undefined : "muted"} className={cn("uppercase tracking-wide", selected && "text-primary-foreground/80")}>
-              {isToday ? t("booking.earliest.today") : formatDate(day, { weekday: "short" }).replace(".", "")}
+              {isSameDay(day, today) ? t("schedule.today") : formatDate(day, { weekday: "short" }).replace(".", "")}
             </Text>
             <Text as="span" size="xl" weight="semibold" tabular className={selected ? "text-primary-foreground" : undefined}>
               {day.getDate()}
             </Text>
-            {marked?.has(dayKeyOf(day)) && <span aria-hidden className={cn("absolute bottom-1.5 size-1.5 rounded-full", selected ? "bg-primary-foreground" : "bg-primary")} />}
+            {marked?.has(dayKey(day)) && <span aria-hidden className={cn("absolute bottom-1.5 size-1.5 rounded-full", selected ? "bg-primary-foreground" : "bg-primary")} />}
           </button>
         );
       })}

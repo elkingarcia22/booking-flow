@@ -300,6 +300,7 @@ export const es = {
   "schedule.afternoon": "Tarde",
   "schedule.evening": "Noche",
   "schedule.pickDay": "Elige el día",
+  "schedule.today": "Hoy",
   "schedule.pickTime": "Elige la hora",
   "schedule.noSlots": "No hay horas disponibles en esta franja.",
   "schedule.team": "Equipo",

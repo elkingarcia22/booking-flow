@@ -78,30 +78,41 @@ export function PersonSheet({ open, onOpenChange, person, onChoose }: { open: bo
       }
     >
       <div className="flex flex-col gap-6">
-        {known.length > 0 && (
-          <section className="flex flex-col gap-2" aria-labelledby="known-people">
-            <Heading level={6} id="known-people">
-              {t("booking.person.savedTitle")}
-            </Heading>
-            <ListItemGroup>
-              {known.map((entry) => (
-                <ListItem
-                  key={entry.key}
-                  leading={
-                    <Avatar>
-                      <AvatarFallback>{initialsOf(entry.person.name)}</AvatarFallback>
-                    </Avatar>
-                  }
-                  title={entry.person.name}
-                  description={entry.person.relation || undefined}
-                  meta={isPicked(entry) ? <ThemaIcon name="check" size="sm" tone="primary" /> : undefined}
-                  selected={isPicked(entry)}
-                  onClick={() => choose(entry.person)}
-                />
-              ))}
-            </ListItemGroup>
-          </section>
-        )}
+        {/* «Para mí» siempre arriba: desde una cita a nombre de otro se vuelve a poner para uno. */}
+        <section className="flex flex-col gap-2" aria-labelledby="known-people">
+          <Heading level={6} id="known-people">
+            {t("booking.person.savedTitle")}
+          </Heading>
+          <ListItemGroup>
+            <ListItem
+              leading={
+                <Avatar>
+                  <AvatarFallback>{initialsOf(state.customer?.name ?? t("booking.person.self"))}</AvatarFallback>
+                </Avatar>
+              }
+              title={t("booking.person.self")}
+              description={state.customer?.name || undefined}
+              meta={person.kind === "self" ? <ThemaIcon name="check" size="sm" tone="primary" /> : undefined}
+              selected={person.kind === "self"}
+              onClick={() => choose({ kind: "self" })}
+            />
+            {known.map((entry) => (
+              <ListItem
+                key={entry.key}
+                leading={
+                  <Avatar>
+                    <AvatarFallback>{initialsOf(entry.person.name)}</AvatarFallback>
+                  </Avatar>
+                }
+                title={entry.person.name}
+                description={entry.person.relation || undefined}
+                meta={isPicked(entry) ? <ThemaIcon name="check" size="sm" tone="primary" /> : undefined}
+                selected={isPicked(entry)}
+                onClick={() => choose(entry.person)}
+              />
+            ))}
+          </ListItemGroup>
+        </section>
 
         <section className="flex flex-col gap-4" aria-labelledby="new-person">
           <Heading level={6} id="new-person">
@@ -126,26 +137,48 @@ export function PersonSheet({ open, onOpenChange, person, onChoose }: { open: bo
   );
 }
 
+interface PersonPickerProps {
+  /** La pregunta; por defecto «¿Para quién es la cita?». */
+  label?: string;
+  /**
+   * En una sola fila y sin título a la vista (el talón de cada parte): «Para mí» y otra ficha que es
+   * «Otra persona» o, ya elegida, su nombre; tocarla abre la hoja para cambiarla.
+   */
+  compact?: boolean;
+}
+
 /**
  * «¿Para quién es la cita?». Para mí, o para otra persona: ver `PersonSheet`.
  */
-export function PersonPicker() {
+export function PersonPicker({ label, compact = false }: PersonPickerProps = {}) {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
   const [isOpen, setIsOpen] = React.useState(false);
   const person = state.draft?.person ?? { kind: "self" };
+  const question = label ?? t("booking.person.title");
+  const sheet = <PersonSheet open={isOpen} onOpenChange={setIsOpen} person={person} onChoose={(next) => dispatch({ type: "setPerson", person: next })} />;
+
+  if (compact) {
+    return (
+      <section aria-label={question} className="flex min-w-0 flex-nowrap gap-2">
+        <Chip label={t("booking.person.self")} icon="users" size="sm" selected={person.kind === "self"} onClick={() => dispatch({ type: "setPerson", person: { kind: "self" } })} />
+        <Chip label={person.kind === "self" ? t("booking.person.add") : person.name} icon="userAdd" size="sm" tone={person.kind === "self" ? "primary" : "default"} selected={person.kind !== "self"} onClick={() => setIsOpen(true)} className="min-w-0" />
+        {sheet}
+      </section>
+    );
+  }
 
   return (
-    <section aria-label={t("booking.person.title")} className="flex flex-col gap-2">
+    <section aria-label={question} className="flex flex-col gap-2">
       <Text size="sm" weight="medium">
-        {t("booking.person.title")}
+        {question}
       </Text>
       <div className="flex flex-wrap gap-2">
         <Chip label={t("booking.person.self")} icon="users" selected={person.kind === "self"} onClick={() => dispatch({ type: "setPerson", person: { kind: "self" } })} />
         {person.kind !== "self" && <Chip label={person.relation ? `${person.name} · ${person.relation}` : person.name} selected onClick={() => setIsOpen(true)} />}
         <Chip label={person.kind === "self" ? t("booking.person.add") : t("booking.person.change")} icon="userAdd" tone="primary" onClick={() => setIsOpen(true)} />
       </div>
-      <PersonSheet open={isOpen} onOpenChange={setIsOpen} person={person} onChoose={(next) => dispatch({ type: "setPerson", person: next })} />
+      {sheet}
     </section>
   );
 }

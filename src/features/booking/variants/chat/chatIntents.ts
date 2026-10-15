@@ -18,6 +18,7 @@ import type { MessageInput } from "./chatKit";
 
 export type ChatAside =
   | { kind: "back" }
+  | { kind: "separate" }
   | { kind: "changeBarber" }
   | { kind: "changeServices" }
   | { kind: "changeTime" }
@@ -49,6 +50,8 @@ const CHANGE = "(cambiar|cambia|cambio|cambiemos|otro|otra|diferente|distinto|di
 const RULES: readonly [ChatAside["kind"], RegExp][] = [
   // «Volver», «espera, quiero volver», «me devuelvo», «me equivoqué»; no «volver a reservar» ni «vuelvo el mes que viene».
   ["back", /\b(volver|volvamos|regresar|regresemos|devolverme|devolvernos|me devuelvo|devuelvete|vuelve|atras|deshacer|me equivoque|paso anterior)\b(?! a (agendar|reservar|pedir|venir|empezar))/],
+  // «Por separado», «cada uno con un barbero distinto», «la barba con otro barbero»: cada servicio aparte.
+  ["separate", /\b(por separado|separar|separado|cada (servicio|uno|cosa) (con|a)|barberos distintos|barberos diferentes|(la barba|el corte|las cejas|el tinte|el afeitado|el tratamiento) (con otr[oa]|a otra hora|aparte))\b/],
   ["changeBarber", new RegExp(`\\b${CHANGE}\\b.*\\b(barbero|barbera|peluquero|estilista)\\b|\\b(barbero|barbera)\\b.*\\b(cambiar|otro|otra|distinto)\\b|\\bcon otr[oa]\\b`)],
   ["changeServices", new RegExp(`\\b${CHANGE}\\b.*\\b(servicio|servicios|corte|barba|lo que me (voy a )?hago)\\b|\\b(agregar|anadir|sumar|quitar)\\b.*\\b(servicio|barba|corte|cejas)\\b`)],
   ["changeTime", new RegExp(`\\b${CHANGE}\\b.*\\b(hora|horario|dia|fecha|turno)\\b|\\b(mas tarde|mas temprano|otro dia|otra hora)\\b`)],
@@ -99,11 +102,13 @@ export interface IntentsKit {
   back: () => boolean;
   /** Ya se está armando una cita (sabe quién es, o dio su celular): se puede cambiar lo elegido. */
   canBook: () => boolean;
+  /** Cada servicio aparte: con la cita en curso, o cuál de una ya apartada. `false` si no hay qué separar. */
+  separate: () => boolean;
 }
 
 /** Las respuestas «de pasada»: cambian lo pedido o responden y retoman. */
 export function useChatIntents(kit: IntentsKit) {
-  const { t, fmt, shop, apply, say, stateRef, catalogRef, totalsRef, serviceNames, barberName, askServices, askBarber, askDay, askBranch, showBarber, showBranch, call, info, manage, resume, back, canBook } = kit;
+  const { t, fmt, shop, apply, say, stateRef, catalogRef, totalsRef, serviceNames, barberName, askServices, askBarber, askDay, askBranch, showBarber, showBranch, call, info, manage, resume, back, canBook, separate } = kit;
 
   /** Para cambiar algo de una cita ya apartada sin borrador abierto: se abre la última para cambiarla. */
   const reopenLast = (): boolean => {
@@ -165,6 +170,12 @@ export function useChatIntents(kit: IntentsKit) {
       case "back":
         if (back()) return true;
         say({ text: t("booking.chat.asideNoBack") });
+        resume();
+        return true;
+      case "separate":
+        if (!booking) return false;
+        if (separate()) return true;
+        say({ text: t("booking.chat.separateNone") });
         resume();
         return true;
       case "changeBarber":

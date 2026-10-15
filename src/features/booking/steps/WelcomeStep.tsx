@@ -2,7 +2,9 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Heading, Text } from "@/components/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SelectMark } from "@/components/selection";
 import { Button } from "@/components/ui/button";
+import { MagicCard } from "@/components/ui/magic-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
@@ -122,18 +124,15 @@ export function WelcomeStep() {
                   const isPicked = index === picked;
                   const who = item.sameBarber ? barber : catalog?.barbers.find((entry) => entry.id === item.barberId);
                   return (
-                    <button
+                    <MagicCard
                       key={item.start + item.barberId}
-                      type="button"
                       role="radio"
                       aria-checked={isPicked}
+                      aria-label={`${fmt.day(date)} · ${fmt.time(date)}${who ? ` · ${who.name}` : ""}`}
+                      isSelected={isPicked}
                       onClick={() => setPicked(index)}
-                      className={cn(
-                        "flex items-center gap-4 rounded-2xl border p-3 text-left",
-                        "transition-colors duration-fast ease-out-expo motion-reduce:transition-none",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                        isPicked ? "border-primary bg-primary/10" : "border-border bg-surface hover:bg-surface-subtle"
-                      )}
+                      className="w-full"
+                      contentClassName="items-center gap-4 text-left"
                     >
                       {/* La fecha como hoja de calendario: el día de la semana pequeño y el número grande. */}
                       <span className={cn("flex w-12 shrink-0 flex-col items-center rounded-xl py-1.5", isPicked ? "bg-primary text-primary-foreground" : "bg-surface-subtle")}>
@@ -155,7 +154,8 @@ export function WelcomeStep() {
                           <AvatarFallback>{initialsOf(who.name)}</AvatarFallback>
                         </Avatar>
                       )}
-                    </button>
+                      <SelectMark kind="radio" checked={isPicked} />
+                    </MagicCard>
                   );
                 })}
                 <Button type="button" variant="ghost" className="self-start" onClick={actions.repeat}>
