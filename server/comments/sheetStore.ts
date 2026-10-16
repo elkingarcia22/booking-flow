@@ -93,11 +93,20 @@ async function createSheet(client: GoogleClient, shareWith: readonly string[]): 
   return file.id;
 }
 
-export function createSheetStore(client: GoogleClient, options: { sheetId?: string; shareWith?: readonly string[] } = {}): CommentsStore {
-  let sheetId: string | null = options.sheetId ?? null;
+/** Abre la hoja a cualquiera con el enlace. Repetirlo no cambia nada, así que vale también para una hoja que ya existía. */
+async function openToLink(client: GoogleClient, spreadsheetId: string, role: "reader" | "writer"): Promise<void> {
+  await client.json(`${DRIVE}/files/${spreadsheetId}/permissions?sendNotificationEmail=false`, { body: { type: "anyone", role } });
+}
+
+export function createSheetStore(client: GoogleClient, options: { sheetId?: string; shareWith?: readonly string[]; linkAccess?: "reader" | "writer" } = {}): CommentsStore {
+  let sheetId: string | null = null;
   const ensure = async () => {
-    sheetId ??= (await findSheet(client)) ?? (await createSheet(client, options.shareWith ?? []));
-    return sheetId;
+    if (sheetId) return sheetId;
+    const id = options.sheetId ?? (await findSheet(client)) ?? (await createSheet(client, options.shareWith ?? []));
+    // Si Google no deja (algunas organizaciones bloquean los enlaces públicos), la hoja sigue sirviendo: solo no queda abierta.
+    if (options.linkAccess) await openToLink(client, id, options.linkAccess).catch((error) => console.error("[comments] no se pudo abrir la hoja al enlace", error));
+    sheetId = id;
+    return id;
   };
   return {
     async read() {

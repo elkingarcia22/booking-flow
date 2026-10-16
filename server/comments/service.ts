@@ -34,7 +34,7 @@ export function createCommentsService(options: CommentsServiceOptions): Comments
     if (store) return store;
     if (!config.googleServiceAccount) return null;
     const client = createGoogleClient(parseServiceAccount(config.googleServiceAccount), { fetchImpl: options.fetchImpl });
-    store = createSheetStore(client, { sheetId: config.sheetId, shareWith: config.shareWith });
+    store = createSheetStore(client, { sheetId: config.sheetId, shareWith: config.shareWith, linkAccess: config.linkAccess });
     return store;
   }
 
