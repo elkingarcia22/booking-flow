@@ -6,6 +6,7 @@ const ENDPOINT = "/api/comments";
 const POLL_MS = 15_000;
 const STORAGE_KEY = "thema.comments.reviewer";
 const FALLBACK_NAME = "Revisor";
+export const MAX_REVIEWER_NAME = 60;
 
 interface StoredReviewer {
   id: string;
@@ -32,19 +33,26 @@ function saveReviewer(reviewer: StoredReviewer) {
 
 /**
  * Quién comenta. Sin cuentas en la vista previa, cada navegador se presenta una vez con su nombre y
- * queda guardado: es la firma de sus comentarios en la hoja.
+ * queda guardado: es la firma de sus comentarios en la hoja. `askName` abre el diálogo (si aún no
+ * hay nombre) y `saveName` lo guarda al cerrarlo.
  */
 export function useReviewer() {
   const [reviewer, setReviewer] = React.useState<StoredReviewer>(() => readReviewer() ?? { id: `r-${Math.random().toString(36).slice(2, 10)}`, name: FALLBACK_NAME });
+  const [isAsking, setIsAsking] = React.useState(false);
   const askName = React.useCallback(() => {
-    if (readReviewer()) return;
-    const typed = window.prompt("¿Cómo te llamas? Va en la firma de tus comentarios.", "")?.trim().slice(0, 60);
-    const next = { id: reviewer.id, name: typed || FALLBACK_NAME };
-    saveReviewer(next);
-    setReviewer(next);
-  }, [reviewer.id]);
+    if (!readReviewer()) setIsAsking(true);
+  }, []);
+  const saveName = React.useCallback(
+    (typed: string) => {
+      const next = { id: reviewer.id, name: typed.trim().slice(0, MAX_REVIEWER_NAME) || FALLBACK_NAME };
+      saveReviewer(next);
+      setReviewer(next);
+      setIsAsking(false);
+    },
+    [reviewer.id]
+  );
   const author = React.useMemo<CommentAuthor>(() => ({ id: reviewer.id, name: reviewer.name }), [reviewer]);
-  return { author, askName };
+  return { author, isAsking, askName, saveName };
 }
 
 async function fetchEvents(signal?: AbortSignal): Promise<CommentEvent[] | null> {

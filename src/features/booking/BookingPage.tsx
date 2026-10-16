@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ThemaIcon } from "@/icons";
 import { ThemeModeToggle } from "@/themes/ThemeSelector";
 import { BookingFlow } from "./BookingFlow";
+import { ReviewerNameDialog } from "./comments/ReviewerNameDialog";
 import { useReviewer, useSharedComments } from "./comments/useSharedComments";
 import { DemoHints } from "./preview/DemoHints";
 import { DemoSite } from "./preview/DemoSite";
@@ -64,7 +65,7 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   // El panel del widget se abre al entrar a esa vista: es lo que se quiere ver ahí.
   const [isWidgetOpen, setIsWidgetOpen] = React.useState(true);
   // Los comentarios de revisión sobre la vista previa: compartidos y guardados en la hoja de Google.
-  const { author: reviewer, askName } = useReviewer();
+  const { author: reviewer, isAsking, askName, saveName } = useReviewer();
   const { threads: commentThreads, onThreadsChange: onCommentsChange } = useSharedComments(reviewer);
 
   if (isEmbed) {
@@ -201,6 +202,7 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
           </CommentLayer>
           <CommentsPanel onNavigate={goToComment} />
         </div>
+        <ReviewerNameDialog open={isAsking} onSubmit={saveName} />
       </div>
     </CommentsProvider>
   );

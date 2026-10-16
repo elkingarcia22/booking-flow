@@ -17,6 +17,7 @@ export interface CommentsService {
 
 const fail = (status: number, code: string, message: string): Reply => ({ status, body: { code, message } });
 
+
 export interface CommentsServiceOptions {
   config: CommentsServerConfig;
   /** Para pruebas: un almacén en memoria en lugar de la hoja de Google. */
@@ -30,6 +31,7 @@ export function createCommentsService(options: CommentsServiceOptions): Comments
   const log = options.log ?? ((message, error) => console.error(`[comments] ${message}`, error));
   let store: CommentsStore | null = options.store ?? null;
 
+  /** `null` si no hay cuenta de Google; lanza si la que hay no es válida (lo atrapa `guarded`). */
   function getStore(): CommentsStore | null {
     if (store) return store;
     if (!config.googleServiceAccount) return null;
@@ -38,32 +40,32 @@ export function createCommentsService(options: CommentsServiceOptions): Comments
     return store;
   }
 
-  return {
-    async list() {
+  const NOT_CONFIGURED = fail(503, "server", "Los comentarios todavía no están configurados en el servidor.");
+  const reason = (error: unknown) => (error instanceof Error ? error.message : "error desconocido");
+
+  /** Ejecuta con el almacén y convierte cualquier fallo (cuenta inválida, Google caído, API sin activar) en una respuesta que dice qué pasó. */
+  async function withStore(step: string, run: (target: CommentsStore) => Promise<Reply>): Promise<Reply> {
+    try {
       const target = getStore();
-      if (!target) return fail(503, "server", "Los comentarios todavía no están configurados en el servidor.");
-      try {
-        return { status: 200, body: { events: await target.read() } };
-      } catch (error) {
-        log("no se pudieron leer los comentarios", error);
-        return fail(502, "upstream", "No se pudieron leer los comentarios.");
-      }
-    },
+      return target ? await run(target) : NOT_CONFIGURED;
+    } catch (error) {
+      log(step, error);
+      return fail(502, "upstream", `${step}: ${reason(error)}`);
+    }
+  }
+
+  return {
+    list: () => withStore("No se pudieron leer los comentarios", async (target) => ({ status: 200, body: { events: await target.read() } })),
     async record(payload) {
       const parsed = commentEventsRequestSchema.safeParse(payload);
       if (!parsed.success) return fail(400, "invalid", "Los comentarios no tienen el formato esperado.");
-      const target = getStore();
-      if (!target) return fail(503, "server", "Los comentarios todavía no están configurados en el servidor.");
-      try {
+      return withStore("No se pudo guardar el comentario", async (target) => {
         // Reintentar un envío no duplica filas: las acciones que ya están (mismo id) se descartan.
         const existing = new Set((await target.read()).map((event) => event.id));
         const fresh: CommentEvent[] = parsed.data.events.filter((event) => !existing.has(event.id));
         if (fresh.length > 0) await target.append(fresh);
         return { status: 200, body: { saved: fresh.length } };
-      } catch (error) {
-        log("no se pudo guardar el comentario", error);
-        return fail(502, "upstream", "No se pudo guardar el comentario.");
-      }
+      });
     },
   };
 }
