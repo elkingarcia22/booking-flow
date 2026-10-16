@@ -13,3 +13,8 @@ export type BookingVersion = "guided" | "agenda-list" | "mixed" | "chat";
 export const BOOKING_VERSIONS: readonly BookingVersion[] = ["guided", "agenda-list", "mixed", "chat"];
 
 export const isBookingVersion = (value: string | null): value is BookingVersion => value !== null && (BOOKING_VERSIONS as readonly string[]).includes(value);
+
+/** Las que se ofrecen hoy. «Paso a paso» y «Agenda en lista» siguen existiendo (la mixta las usa), pero no se eligen aparte. */
+export const HIDDEN_BOOKING_VERSIONS: readonly BookingVersion[] = ["guided", "agenda-list"];
+export const DEFAULT_BOOKING_VERSION: BookingVersion = "mixed";
+export const isOfferedBookingVersion = (value: string | null): value is BookingVersion => isBookingVersion(value) && !HIDDEN_BOOKING_VERSIONS.includes(value);

@@ -235,6 +235,7 @@ export const bookingEs = {
   "booking.gallery.count": "{current} de {total}",
   "booking.gallery.hint": "Desliza o usa las flechas para ver más fotos.",
   "booking.gallery.photo": "Foto {current} de {total}",
+  "booking.gallery.expand": "Ampliar las fotos",
   "booking.gallery.close": "Cerrar la galería",
   "booking.gallery.previous": "Foto anterior",
   "booking.gallery.next": "Foto siguiente",

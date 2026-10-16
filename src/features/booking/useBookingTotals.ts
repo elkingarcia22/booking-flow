@@ -68,8 +68,9 @@ export function useBookingTotals(state: BookingState, catalog: BookingCatalog | 
     // persona aún no ha decidido nada. En el pago cuentan la propina marcada y, sin método elegido,
     // la tarjeta si la barbería cobra en línea (así abre esa pantalla).
     const atPayment = state.step === "payment";
-    const tip = atPayment ? (shop?.tipOptions.find((option) => option.id === state.tipId) ?? null) : null;
     const method = atPayment ? (state.method ?? (shop?.payment.card ? "card" : "shop")) : null;
+    // Quien paga en la barbería deja la propina allá: no se pregunta ni se suma.
+    const tip = atPayment && method !== "shop" ? (shop?.tipOptions.find((option) => option.id === state.tipId) ?? null) : null;
     // Igual los descuentos (cupón y cortesía de la membresía): antes del pago, el total es el de lista.
     return computeTotals({
       services,

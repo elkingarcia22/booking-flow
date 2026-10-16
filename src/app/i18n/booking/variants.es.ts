@@ -12,7 +12,6 @@ export const bookingVariantsEs = {
   "booking.entry.viewBranch": "Ver sede",
   "booking.entry.viewBranches": "Ver sedes",
   "booking.entry.manageHint": "Cambiar o cancelar",
-  "booking.entry.call": "Llamar",
   "booking.chat.trigger": "Agenda con {name}",
   "booking.version.label": "Versión de la experiencia",
   "booking.version.guided": "Paso a paso",

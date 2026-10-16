@@ -220,6 +220,7 @@ export const bookingEn: Readonly<Record<keyof typeof bookingEs, string>> = {
   "booking.gallery.count": "{current} of {total}",
   "booking.gallery.hint": "Swipe or use the arrow keys to see more photos.",
   "booking.gallery.photo": "Photo {current} of {total}",
+  "booking.gallery.expand": "Enlarge photos",
   "booking.gallery.close": "Close gallery",
   "booking.gallery.previous": "Previous photo",
   "booking.gallery.next": "Next photo",

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ListChecks, ListFilter, MessagesSquare, Split, Monitor, PanelRightOpen, Smartphone, Tablet } from "lucide-react";
+import { MessagesSquare, Split, Monitor, PanelRightOpen, Smartphone, Tablet } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useAppT } from "@/app/i18n";
@@ -16,7 +16,7 @@ import { DemoSite } from "./preview/DemoSite";
 import { DeviceFrame } from "./preview/DeviceFrame";
 import { PortalContent, PortalSlot } from "./preview/portalSlot";
 import { usePortalNode } from "./preview/usePortalNode";
-import { isBookingVersion, type BookingVersion } from "./versions";
+import { DEFAULT_BOOKING_VERSION, isOfferedBookingVersion, type BookingVersion } from "./versions";
 
 type PreviewMode = "phone" | "tablet" | "monitor" | "widget";
 const MODES: readonly PreviewMode[] = ["phone", "tablet", "monitor", "widget"];
@@ -53,9 +53,9 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   const requested = params.get("vista") as PreviewMode | null;
   const mode: PreviewMode = requested && MODES.includes(requested) ? requested : "tablet";
   const requestedVersion = params.get("version");
-  const version: BookingVersion = isBookingVersion(requestedVersion) ? requestedVersion : "guided";
-  // El enlace público lleva la versión elegida (la guiada es la de siempre y no la necesita).
-  const publicUrl = `${window.location.origin}${PUBLIC_PATH}?embed=1${version === "guided" ? "" : `&version=${version}`}`;
+  const version: BookingVersion = isOfferedBookingVersion(requestedVersion) ? requestedVersion : DEFAULT_BOOKING_VERSION;
+  // El enlace público lleva la versión elegida (la de por defecto no la necesita).
+  const publicUrl = `${window.location.origin}${PUBLIC_PATH}?embed=1${version === DEFAULT_BOOKING_VERSION ? "" : `&version=${version}`}`;
   // Una sola reserva para todas las vistas: se pinta en este nodo y el nodo se muda al marco activo,
   // así al pasar de celular a tablet, a monitor o al widget sigue en el paso en que estaba.
   const flowNode = usePortalNode("h-full w-full");
@@ -81,8 +81,6 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   };
 
   const versions = [
-    { value: "guided", label: t("booking.version.guided"), icon: ListChecks },
-    { value: "agenda-list", label: t("booking.version.agendaList"), icon: ListFilter },
     { value: "mixed", label: t("booking.version.mixed"), icon: Split },
     { value: "chat", label: t("booking.version.chat"), icon: MessagesSquare },
   ];

@@ -136,11 +136,16 @@ export function usePaymentController() {
   };
 
   /**
-   * «Pagar»: si la barbería recibe propinas, antes de cobrar se pregunta en un modal.
+   * «Pagar»: si la barbería recibe propinas, antes de cobrar se pregunta en un modal (no al pagar en
+   * la barbería: la propina se deja allá).
    * La conversación ya la preguntó con sus propias respuestas: pasa `askTip: false`.
    */
   const pay = ({ askTip = true }: { askTip?: boolean } = {}) => {
     if (!validate()) return;
+    if (method === "shop") {
+      submit(null);
+      return;
+    }
     if (askTip && shop.tipOptions.length > 0 && !coveredByGift) {
       setTipOpen(true);
       return;

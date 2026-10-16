@@ -1,5 +1,6 @@
+import * as React from "react";
 import { useAppT } from "@/app/i18n";
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import { Carousel, type CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { ThemaIcon } from "@/icons";
 import { cn } from "@/lib/utils";
 
@@ -21,8 +22,9 @@ interface PhotoStripProps {
  */
 export function PhotoStrip({ photos, onOpen, className, featured = false }: PhotoStripProps) {
   const t = useAppT();
+  const [api, setApi] = React.useState<CarouselApi>();
   return (
-    <Carousel opts={{ align: "start", dragFree: true, containScroll: "trimSnaps" }} className={cn("-mx-6", className)}>
+    <Carousel setApi={setApi} opts={{ align: "start", dragFree: true, containScroll: "trimSnaps" }} className={cn("-mx-6", className)}>
       <CarouselContent className="-ml-2 px-6">
         {photos.map((src, position) => (
           <CarouselItem key={src} className={cn("pl-2", featured && position === 0 ? "basis-[64%]" : "basis-[40%]")}>
@@ -33,13 +35,19 @@ export function PhotoStrip({ photos, onOpen, className, featured = false }: Phot
               className="group relative block h-44 w-full overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               <img src={src} alt="" loading={position < 2 ? "eager" : "lazy"} draggable={false} className="size-full select-none object-cover transition-transform duration-slow ease-out-expo group-hover:scale-105 motion-reduce:transition-none" />
-              <span className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full bg-black/50 text-white" aria-hidden>
-                <ThemaIcon name="expand" size="xs" tone="inverse" />
-              </span>
             </button>
           </CarouselItem>
         ))}
       </CarouselContent>
+      {/* Un solo botón para toda la tira (cada foto ya se abre al tocarla): abre la que va primera a la vista. */}
+      <button
+        type="button"
+        onClick={() => onOpen(api?.selectedScrollSnap() ?? 0)}
+        aria-label={t("booking.gallery.expand")}
+        className="absolute right-8 top-2 flex size-8 items-center justify-center rounded-full bg-white text-black shadow-md ring-1 ring-black/15 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+      >
+        <ThemaIcon name="expand" size="sm" className="text-black" />
+      </button>
       {photos.length > 2 && (
         <>
           <CarouselPrevious className="left-8 top-1/2 -translate-y-1/2 bg-black/50 text-white hover:bg-black/70 hover:text-white disabled:opacity-0" aria-label={t("booking.gallery.previous")} />
