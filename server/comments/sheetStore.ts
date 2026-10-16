@@ -68,6 +68,26 @@ async function findSheet(client: GoogleClient): Promise<string | null> {
   return result.files?.[0]?.id ?? null;
 }
 
+/**
+ * En una hoja que creó una persona (`COMMENTS_SHEET_ID`) la pestaña «Acciones» y su cabecera no existen:
+ * se agregan la primera vez, sin tocar lo que ya tenga. Una cuenta de servicio no puede crear la hoja
+ * por sí sola (no tiene espacio en Drive), por eso la hoja la crea la persona y se la comparte.
+ */
+async function ensureActionsTab(client: GoogleClient, spreadsheetId: string): Promise<void> {
+  const meta = await client.json<{ sheets?: { properties: { sheetId: number; title: string } }[] }>(`${SHEETS}/${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
+  if (meta.sheets?.some((sheet) => sheet.properties.title === ACTIONS_TAB)) return;
+  const reply = await client.json<{ replies?: { addSheet?: { properties: { sheetId: number } } }[] }>(`${SHEETS}/${spreadsheetId}:batchUpdate`, {
+    body: { requests: [{ addSheet: { properties: { title: ACTIONS_TAB, gridProperties: { frozenRowCount: 1 } } } }] },
+  });
+  const sheetId = reply.replies?.[0]?.addSheet?.properties.sheetId;
+  await client.json(`${SHEETS}/${spreadsheetId}/values/${encodeURIComponent(`${ACTIONS_TAB}!A1`)}?valueInputOption=RAW`, { method: "PUT", body: { values: [[...COLUMNS]] } });
+  if (sheetId !== undefined) {
+    await client.json(`${SHEETS}/${spreadsheetId}:batchUpdate`, {
+      body: { requests: [{ repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.93, green: 0.93, blue: 0.95 } } }, fields: "userEnteredFormat(textFormat,backgroundColor)" } }] },
+    });
+  }
+}
+
 async function createSheet(client: GoogleClient, shareWith: readonly string[]): Promise<string> {
   const file = await client.json<{ id: string }>(`${DRIVE}/files`, {
     body: { name: "Comentarios · Agendamiento online", mimeType: "application/vnd.google-apps.spreadsheet", appProperties: { [MARKER_KEY]: "1" } },
@@ -102,7 +122,9 @@ export function createSheetStore(client: GoogleClient, options: { sheetId?: stri
   let sheetId: string | null = null;
   const ensure = async () => {
     if (sheetId) return sheetId;
-    const id = options.sheetId ?? (await findSheet(client)) ?? (await createSheet(client, options.shareWith ?? []));
+    let id = options.sheetId ?? null;
+    if (id) await ensureActionsTab(client, id);
+    else id = (await findSheet(client)) ?? (await createSheet(client, options.shareWith ?? []));
     // Si Google no deja (algunas organizaciones bloquean los enlaces públicos), la hoja sigue sirviendo: solo no queda abierta.
     if (options.linkAccess) await openToLink(client, id, options.linkAccess).catch((error) => console.error("[comments] no se pudo abrir la hoja al enlace", error));
     sheetId = id;

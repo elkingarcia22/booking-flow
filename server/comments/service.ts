@@ -50,7 +50,10 @@ export function createCommentsService(options: CommentsServiceOptions): Comments
       return target ? await run(target) : NOT_CONFIGURED;
     } catch (error) {
       log(step, error);
-      return fail(502, "upstream", `${step}: ${reason(error)}`);
+      const message = reason(error);
+      // Una cuenta de servicio no tiene espacio en Drive: la hoja la crea una persona y se la comparte.
+      const hint = /quota/i.test(message) ? " Crea la hoja en tu propio Drive, compártela como Editor con la cuenta de servicio y pon su id en COMMENTS_SHEET_ID." : "";
+      return fail(502, "upstream", `${step}: ${message}${hint}`);
     }
   }
 
