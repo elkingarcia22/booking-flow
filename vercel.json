@@ -49,6 +49,9 @@
   "functions": {
     "api/tts/index.ts": {
       "maxDuration": 30
+    },
+    "api/comments/index.ts": {
+      "maxDuration": 15
     }
   }
 }

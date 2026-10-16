@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ThemaIcon } from "@/icons";
 import { ThemeModeToggle } from "@/themes/ThemeSelector";
 import { BookingFlow } from "./BookingFlow";
-import { BOOKING_REVIEWER, bookingCommentsSeed } from "./comments/bookingComments";
+import { useReviewer, useSharedComments } from "./comments/useSharedComments";
 import { DemoHints } from "./preview/DemoHints";
 import { DemoSite } from "./preview/DemoSite";
 import { DeviceFrame } from "./preview/DeviceFrame";
@@ -63,8 +63,9 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   const flowNode = usePortalNode("h-full w-full");
   // El panel del widget se abre al entrar a esa vista: es lo que se quiere ver ahí.
   const [isWidgetOpen, setIsWidgetOpen] = React.useState(true);
-  // Los comentarios de revisión sobre la vista previa (en la demo, en memoria).
-  const [commentSeed] = React.useState(bookingCommentsSeed);
+  // Los comentarios de revisión sobre la vista previa: compartidos y guardados en la hoja de Google.
+  const { author: reviewer, askName } = useReviewer();
+  const { threads: commentThreads, onThreadsChange: onCommentsChange } = useSharedComments(reviewer);
 
   if (isEmbed) {
     return (
@@ -138,7 +139,7 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   };
 
   return (
-    <CommentsProvider currentUser={BOOKING_REVIEWER} defaultThreads={commentSeed} context={commentContext} contextLabel={commentContextLabel}>
+    <CommentsProvider currentUser={reviewer} threads={commentThreads} onThreadsChange={onCommentsChange} onOpenChange={(isOpen) => isOpen && askName()} context={commentContext} contextLabel={commentContextLabel}>
       <div className="flex h-dvh flex-col bg-surface-subtle">
         <header className="relative z-header flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
           {!standalone && (

@@ -24,4 +24,5 @@ siempre. Para probar: celular `320 217 2738` (cliente que vuelve) y código `246
 2. Opcional, la voz natural de Clipper: en *Settings → Environment Variables* agrega
    `GEMINI_API_KEY` (gratis en aistudio.google.com; o `ELEVENLABS_API_KEY`, `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION`, u `OPENAI_API_KEY`).
    Sin ninguna, Clipper usa la voz del navegador. Detalle en `.env.example`.
-3. Despliega. Las rutas del cliente caen en `index.html`; `/api/tts` es la función de la voz.
+3. Opcional, los comentarios de revisión compartidos: `GOOGLE_SERVICE_ACCOUNT_JSON` y `FEEDBACK_SHARE_WITH` (ver `.env.example`). Sin ellos los comentarios solo viven en el navegador.
+4. Despliega. Las rutas del cliente caen en `index.html`; `/api/tts` es la función de la voz y `/api/comments`, la de los comentarios.
