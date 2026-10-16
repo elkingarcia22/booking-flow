@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useAppT } from "@/app/i18n";
 import { Grain } from "@/components/atmosphere";
+import { CommentLayer, CommentsPanel, CommentsProvider, CommentsToggle, type CommentThread } from "@/components/comments";
 import { SegmentedControl } from "@/components/selection";
 import { Text } from "@/components/typography";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +12,13 @@ import { Button } from "@/components/ui/button";
 import { ThemaIcon } from "@/icons";
 import { ThemeModeToggle } from "@/themes/ThemeSelector";
 import { BookingFlow } from "./BookingFlow";
+import { BOOKING_REVIEWER, bookingCommentsSeed } from "./comments/bookingComments";
 import { DemoHints } from "./preview/DemoHints";
 import { DemoSite } from "./preview/DemoSite";
 import { DeviceFrame } from "./preview/DeviceFrame";
 import { PortalContent, PortalSlot } from "./preview/portalSlot";
 import { usePortalNode } from "./preview/usePortalNode";
-import { DEFAULT_BOOKING_VERSION, isOfferedBookingVersion, type BookingVersion } from "./versions";
+import { DEFAULT_BOOKING_VERSION, isBookingVersion, isOfferedBookingVersion, type BookingVersion } from "./versions";
 
 type PreviewMode = "phone" | "tablet" | "monitor" | "widget";
 const MODES: readonly PreviewMode[] = ["phone", "tablet", "monitor", "widget"];
@@ -61,6 +63,8 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   const flowNode = usePortalNode("h-full w-full");
   // El panel del widget se abre al entrar a esa vista: es lo que se quiere ver ahí.
   const [isWidgetOpen, setIsWidgetOpen] = React.useState(true);
+  // Los comentarios de revisión sobre la vista previa (en la demo, en memoria).
+  const [commentSeed] = React.useState(bookingCommentsSeed);
 
   if (isEmbed) {
     return (
@@ -117,62 +121,86 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
     { value: "widget", label: t("booking.preview.widget"), icon: PanelRightOpen },
   ];
 
-  return (
-    <div className="flex h-dvh flex-col bg-surface-subtle">
-      <header className="relative z-header flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
-        {!standalone && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => navigate("/")}>
-            <ThemaIcon name="arrowLeft" />
-            <span className="hidden sm:inline">{t("booking.preview.back")}</span>
-          </Button>
-        )}
-        <div className="flex min-w-0 items-center gap-2">
-          <Text weight="semibold" truncate>
-            {t("booking.preview.title")}
-          </Text>
-          <Badge variant="secondary">{t("booking.preview.badge")}</Badge>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <DemoHints />
-          <ThemeModeToggle />
-          <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
-            <ThemaIcon name="link" />
-            <span className="hidden md:inline">{t("booking.preview.copy")}</span>
-          </Button>
-          <Button asChild variant="ghost" size="icon-sm" aria-label={t("booking.preview.open")}>
-            <a href={publicUrl} target="_blank" rel="noreferrer">
-              <ThemaIcon name="expand" />
-            </a>
-          </Button>
-        </div>
-      </header>
+  // Cada comentario queda en la experiencia y el dispositivo donde se dejó: los pins van en % del marco.
+  const view = isNarrow ? "full" : mode;
+  const commentContext = `${version}:${view}`;
+  const commentContextLabel = `${versions.find((item) => item.value === version)?.label ?? version} · ${modes.find((item) => item.value === view)?.label ?? t("booking.preview.title")}`;
+  const goToComment = (thread: CommentThread) => {
+    const [nextVersion, nextView] = (thread.context ?? "").split(":");
+    setParams(
+      (current) => ({
+        ...Object.fromEntries(current),
+        ...(nextVersion && isBookingVersion(nextVersion) ? { version: nextVersion } : {}),
+        ...(nextView && MODES.includes(nextView as PreviewMode) ? { vista: nextView } : {}),
+      }),
+      { replace: true }
+    );
+  };
 
-      <main className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Grain scope="container" />
-        {/* Los controles de la vista previa, centrados bajo la cabecera: la experiencia y, si hay marcos, el dispositivo. */}
-        <div className="relative z-raised flex shrink-0 flex-col items-center gap-2 px-4 pb-1 pt-4">
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
-            <SegmentedControl className="w-auto" options={versions} value={version} onChange={(value) => setParam("version", value)} size="sm" fullWidth={isNarrow} ariaLabel={t("booking.version.label")} />
-            {!isNarrow && <SegmentedControl className="w-auto" options={modes} value={mode} onChange={selectMode} size="sm" ariaLabel={t("booking.preview.mode")} />}
-          </div>
-        </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center p-0 md:p-6 md:pt-3">
-          {isNarrow ? (
-            <PortalSlot node={flowNode} className="h-full w-full" />
-          ) : isWidget ? (
-            <DeviceFrame device="monitor" address="barberia.example.com">
-              <DemoSite isOpen={isWidgetOpen} onOpenChange={setIsWidgetOpen}>
-                <PortalSlot node={flowNode} className="h-full w-full" />
-              </DemoSite>
-            </DeviceFrame>
-          ) : (
-            <DeviceFrame device={mode === "widget" ? "monitor" : mode} address={publicUrl.replace(/^https?:\/\//, "")}>
-              <PortalSlot node={flowNode} className="h-full w-full" />
-            </DeviceFrame>
+  return (
+    <CommentsProvider currentUser={BOOKING_REVIEWER} defaultThreads={commentSeed} context={commentContext} contextLabel={commentContextLabel}>
+      <div className="flex h-dvh flex-col bg-surface-subtle">
+        <header className="relative z-header flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
+          {!standalone && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ThemaIcon name="arrowLeft" />
+              <span className="hidden sm:inline">{t("booking.preview.back")}</span>
+            </Button>
           )}
+          <div className="flex min-w-0 items-center gap-2">
+            <Text weight="semibold" truncate>
+              {t("booking.preview.title")}
+            </Text>
+            <Badge variant="secondary">{t("booking.preview.badge")}</Badge>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <DemoHints />
+            <ThemeModeToggle />
+            <CommentsToggle />
+            <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
+              <ThemaIcon name="link" />
+              <span className="hidden md:inline">{t("booking.preview.copy")}</span>
+            </Button>
+            <Button asChild variant="ghost" size="icon-sm" aria-label={t("booking.preview.open")}>
+              <a href={publicUrl} target="_blank" rel="noreferrer">
+                <ThemaIcon name="expand" />
+              </a>
+            </Button>
+          </div>
+        </header>
+
+        <div className="flex min-h-0 flex-1">
+          <CommentLayer className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <main className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
+              <Grain scope="container" />
+              {/* Los controles de la vista previa, centrados bajo la cabecera: la experiencia y, si hay marcos, el dispositivo. */}
+              <div className="relative z-raised flex shrink-0 flex-col items-center gap-2 px-4 pb-1 pt-4">
+                <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+                  <SegmentedControl className="w-auto" options={versions} value={version} onChange={(value) => setParam("version", value)} size="sm" fullWidth={isNarrow} ariaLabel={t("booking.version.label")} />
+                  {!isNarrow && <SegmentedControl className="w-auto" options={modes} value={mode} onChange={selectMode} size="sm" ariaLabel={t("booking.preview.mode")} />}
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 items-center justify-center p-0 md:p-6 md:pt-3">
+                {isNarrow ? (
+                  <PortalSlot node={flowNode} className="h-full w-full" />
+                ) : isWidget ? (
+                  <DeviceFrame device="monitor" address="barberia.example.com">
+                    <DemoSite isOpen={isWidgetOpen} onOpenChange={setIsWidgetOpen}>
+                      <PortalSlot node={flowNode} className="h-full w-full" />
+                    </DemoSite>
+                  </DeviceFrame>
+                ) : (
+                  <DeviceFrame device={mode === "widget" ? "monitor" : mode} address={publicUrl.replace(/^https?:\/\//, "")}>
+                    <PortalSlot node={flowNode} className="h-full w-full" />
+                  </DeviceFrame>
+                )}
+              </div>
+              <PortalContent node={flowNode}>{flow}</PortalContent>
+            </main>
+          </CommentLayer>
+          <CommentsPanel onNavigate={goToComment} />
         </div>
-        <PortalContent node={flowNode}>{flow}</PortalContent>
-      </main>
-    </div>
+      </div>
+    </CommentsProvider>
   );
 }

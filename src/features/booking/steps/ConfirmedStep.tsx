@@ -36,6 +36,10 @@ export function ConfirmedStep({ onFinish }: { onFinish?: () => void }) {
         <Badge variant="outline">{t("booking.confirmed.number", { number: reservation.number })}</Badge>
       </div>
 
+      <ConfirmedBarberNote reservationId={reservation.id} />
+
+      <ConfirmedActions reservation={reservation} />
+
       <section className="rounded-2xl border border-border bg-surface-subtle p-4">
         <ReceiptView reservation={reservation} fmt={fmt} />
         {!isPaid && (
@@ -44,10 +48,6 @@ export function ConfirmedStep({ onFinish }: { onFinish?: () => void }) {
           </Text>
         )}
       </section>
-
-      <ConfirmedActions reservation={reservation} />
-
-      <ConfirmedBarberNote reservationId={reservation.id} />
 
       <Text size="sm" tone="muted" className="flex items-start gap-2">
         <ThemaIcon name="info" size="sm" />

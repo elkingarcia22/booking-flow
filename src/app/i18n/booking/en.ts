@@ -185,7 +185,7 @@ export const bookingEn: Readonly<Record<keyof typeof bookingEs, string>> = {
   "booking.person.relation.friend": "Friend",
   "booking.person.relation.other": "Other",
   "booking.person.save": "Done",
-  "booking.person.change": "Change person",
+  "booking.person.change": "Change",
   "booking.person.savedTitle": "Your people",
   "booking.person.newTitle": "Or add someone new",
   "booking.person.firstTitle": "Add the person",
@@ -456,7 +456,7 @@ export const bookingEn: Readonly<Record<keyof typeof bookingEs, string>> = {
   "booking.payment.policyAccept": "By booking you accept the shop's cancellation policy.",
 
   "booking.confirmed.title": "All set, {name}!",
-  "booking.confirmed.lead": "Your booking is confirmed. We'll message you on WhatsApp and remind you the day before and 2 hours before.",
+  "booking.confirmed.lead": "Your booking is confirmed. We'll message you via text message or email and remind you the day before and 2 hours before.",
   "booking.confirmed.number": "Booking {number}",
   "booking.confirmed.paid": "Paid with {method}",
   "booking.confirmed.payAtShop": "You pay {amount} when you arrive",

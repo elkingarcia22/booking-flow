@@ -75,10 +75,10 @@ export function ReviewStep() {
             size={layout === "wide" ? "sm" : "icon-sm"}
             className={layout === "wide" ? "h-7 px-2 text-primary" : "text-primary"}
             onClick={() => setPersonFor(index)}
-            aria-label={item.person.kind === "self" ? t("booking.person.add") : t("booking.person.change")}
+            aria-label={t("booking.person.change")}
           >
             <ThemaIcon name={item.person.kind === "self" ? "userAdd" : "edit"} />
-            {layout === "wide" && (item.person.kind === "self" ? t("booking.person.add") : t("booking.person.change"))}
+            {layout === "wide" && t("booking.person.change")}
           </Button>
         }
         actions={

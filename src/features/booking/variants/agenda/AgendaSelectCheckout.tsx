@@ -87,7 +87,7 @@ function AppointmentCard({ item, onSplit }: { item: DraftItem; /** Saca ese serv
           )}
         </Text>
         <Button type="button" variant="ghost" size="sm" className="-mr-1.5" onClick={() => setIsPersonOpen(true)}>
-          {t(forOther ? "booking.person.change" : "booking.person.add")}
+          {t("booking.person.change")}
         </Button>
         {state.items.length > 1 && (
           <Button type="button" variant="ghost" size="sm" className="-mr-1.5" onClick={remove} aria-label={t("booking.review.remove")}>

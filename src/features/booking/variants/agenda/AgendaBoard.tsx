@@ -13,7 +13,6 @@ import { dayKeyOf, firstBookableDay, parseStart } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { AgendaCover, AgendaCoverTitle } from "../../flow/AgendaCover";
 import { AlternativeBarbers } from "../../flow/AlternativeBarbers";
-import { EarliestSlot } from "../../flow/EarliestSlot";
 import { NextToPart } from "../../flow/NextToPart";
 import { CallCard, ScheduleHeading } from "../../flow/ScheduleParts";
 import { SeparateServicesSwitch } from "../../flow/SeparateServicesSwitch";
@@ -182,8 +181,6 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
               {t("booking.agenda.pickTime")}
             </Text>
           )}
-          {/* «Lo antes posible» se calcula con sede y servicio: hasta entonces solo se ven los días. */}
-          {!editing && <EarliestSlot isBlocked={isBlocked} />}
           <DayStrip first={first} count={DAYS_AHEAD} value={day} onChange={setDay} marked={marked} size={touch} />
         </section>
       )}

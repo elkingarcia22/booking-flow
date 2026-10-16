@@ -11,7 +11,6 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { clockMinutes, dayKeyOf, firstBookableDay, initialsOf, isSameDayAs, isTodayOver, parseStart, toStart } from "../bookingFormat";
 import { AlternativeBarbers } from "../flow/AlternativeBarbers";
-import { EarliestSlot } from "../flow/EarliestSlot";
 import { NextToPart } from "../flow/NextToPart";
 import { useBookingFlow } from "../flow/BookingContext";
 import { StepLayout } from "../flow/StepLayout";
@@ -125,7 +124,6 @@ export function TimeStep() {
 
       {parts.length > 0 && !isWaiting && <NextToPart day={day} parts={parts} busy={busy} minutes={minutes} isFree={(date) => free.has(clockOf(date))} onPick={pick} />}
 
-      <EarliestSlot isBlocked={isBlocked} />
 
       {skin === "agenda" ? (
         // La cara de la Agenda («Según el cliente»): la tira de días grande y las horas por franja.

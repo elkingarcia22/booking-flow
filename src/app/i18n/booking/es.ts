@@ -198,7 +198,7 @@ export const bookingEs = {
   "booking.person.relation.friend": "Amigo",
   "booking.person.relation.other": "Otro",
   "booking.person.save": "Listo",
-  "booking.person.change": "Cambiar persona",
+  "booking.person.change": "Cambiar",
   "booking.person.savedTitle": "Tu gente",
   "booking.person.newTitle": "O agrega a alguien nuevo",
   "booking.person.firstTitle": "Agrega a la persona",
@@ -477,7 +477,7 @@ export const bookingEs = {
 
   // ── Confirmada ──
   "booking.confirmed.title": "¡Listo, {name}!",
-  "booking.confirmed.lead": "Tu reserva está confirmada. Te escribimos por WhatsApp y te recordamos el día antes y 2 horas antes.",
+  "booking.confirmed.lead": "Tu reserva está confirmada. Te escribimos por mensaje de texto o correo electrónico y te recordamos el día antes y 2 horas antes.",
   "booking.confirmed.number": "Reserva {number}",
   "booking.confirmed.paid": "Pagado con {method}",
   "booking.confirmed.payAtShop": "Pagas {amount} al llegar",
