@@ -11,17 +11,18 @@ import { StepLayout } from "../flow/StepLayout";
  * deja pagar en el local, esa opción está; si el cliente es «solo en línea»,
  * no. El botón dice exactamente lo que va a pasar («Pagar $64»).
  *
- * La portada solo pide el celular (al cliente de siempre lo reconoce sin código):
- * aquí, antes de cobrar, va el código que confirma que es suyo (y la ficha si es
- * la primera vez). Al verificarlo se monta el pago con sus tarjetas y su membresía.
+ * La portada solo pide el celular (al cliente de siempre lo reconoce sin código) y
+ * aquí se paga sin código: el nuevo deja su ficha si aún no la tiene. El código solo
+ * aparece si elige pagar con tarjeta y ya tenía tarjetas guardadas (en el cobro).
  */
 export function PaymentStep() {
   const t = useAppT();
   const { state } = useBookingFlow();
-  // Se paga a su nombre solo con el código confirmado y su ficha.
-  if (!state.verified || !state.customer) {
+  // Se paga a su nombre: falta saber quién es o, si es nuevo, su ficha.
+  if (!state.customer) {
+    const isNew = state.verified || state.token !== null;
     return (
-      <StepLayout title={t(state.verified ? "booking.payIdentity.newTitle" : "booking.payIdentity.title")} lead={t(state.verified ? "booking.payIdentity.newLead" : "booking.payIdentity.lead")}>
+      <StepLayout title={t(isNew ? "booking.payIdentity.newTitle" : "booking.payIdentity.whoTitle")} lead={t(isNew ? "booking.payIdentity.newLead" : "booking.payIdentity.whoLead")}>
         <PayIdentity />
       </StepLayout>
     );

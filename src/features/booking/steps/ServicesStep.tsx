@@ -5,7 +5,6 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import { Text } from "@/components/typography";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { MagicCard } from "@/components/ui/magic-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconTile } from "@/components/utility/IconTile";
@@ -22,7 +21,6 @@ import { fromPrice, itemDuration, itemPrice } from "../useBookingTotals";
 
 const ALL = "__all__";
 const SKELETON_ROWS = 5;
-const plain = (value: string): string => value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
  * Los servicios: varios en la misma cita (corte + barba), con foto, cuánto
@@ -31,14 +29,13 @@ const plain = (value: string): string => value.toLowerCase().normalize("NFD").re
 export function ServicesStep() {
   const t = useAppT();
   const { state, dispatch, catalog, catalogLoading, fmt, layout } = useBookingFlow();
-  const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState(ALL);
   // Con ratón no hay barra que agarrar: la tira se arrastra y trae a la vista lo elegido.
   const categoryRow = useDragScroll<HTMLDivElement>({ follow: category });
   const selected = state.draft?.serviceIds ?? [];
   const services = catalog?.services ?? [];
   const categories = [...new Set(services.map((service) => service.category).filter(Boolean))];
-  const visible = services.filter((service) => (category === ALL || service.category === category) && (query.trim() === "" || plain(`${service.name} ${service.description}`).includes(plain(query.trim()))));
+  const visible = services.filter((service) => category === ALL || service.category === category);
   const minutes = itemDuration(selected, catalog);
   // Tocó «Siguiente» sin elegir nada: la lista y el pie se marcan hasta que elija uno.
   const [triedNext, setTriedNext] = React.useState(false);
@@ -91,10 +88,6 @@ export function ServicesStep() {
       {!(canSeparate && isSeparate) && <PersonPicker />}
 
       <div className="flex flex-col gap-3">
-        <div className="relative">
-          <ThemaIcon name="search" size="sm" tone="muted" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("booking.services.search")} aria-label={t("booking.services.search")} className="pl-9" />
-        </div>
         {categories.length > 1 && (
           <div ref={categoryRow} className="-mx-5 -my-1.5 flex gap-2 overflow-x-auto px-5 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Chip label={t("booking.services.all")} selected={category === ALL} onClick={() => setCategory(ALL)} className="shrink-0" />
@@ -113,8 +106,6 @@ export function ServicesStep() {
         </div>
       ) : services.length === 0 ? (
         <EmptyState icon="scissors" title={t("booking.services.emptyBranch")} />
-      ) : visible.length === 0 ? (
-        <EmptyState icon="search" title={t("booking.services.empty")} />
       ) : (
         <div className="flex flex-col gap-3">
         {missingService && (

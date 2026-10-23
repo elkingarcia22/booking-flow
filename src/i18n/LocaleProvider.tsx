@@ -49,14 +49,21 @@ export function LocaleProvider({
    * en tu producto se dice de otra forma.
    */
   messages,
+  /**
+   * Un idioma fijo que gana a lo guardado y no se guarda: la reserva en línea anidada
+   * dentro de la app habla el idioma que eligió la barbería, sin tocar el de quien mira.
+   */
+  forcedLocale,
 }: {
   children: React.ReactNode;
   defaultLocale?: LocaleId;
   messages?: AppMessages;
+  forcedLocale?: LocaleId;
 }) {
-  const [locale, setLocaleState] = React.useState<LocaleId>(
+  const [chosen, setLocaleState] = React.useState<LocaleId>(
     () => readStored() ?? defaultLocale ?? detectBrowserLocale() ?? DEFAULT_LOCALE
   );
+  const locale = forcedLocale ?? chosen;
 
   const current = React.useMemo(() => findLocale(locale), [locale]);
 
@@ -64,7 +71,12 @@ export function LocaleProvider({
   // pantalla para pronunciar, el navegador para ofrecer traducción y el CSS
   // para partir palabras con las reglas del idioma.
   React.useEffect(() => {
+    // Al desmontar devuelve el anterior: un proveedor anidado (la reserva) no deja su idioma puesto.
+    const previous = document.documentElement.lang;
     document.documentElement.lang = current.intl;
+    return () => {
+      document.documentElement.lang = previous;
+    };
   }, [current.intl]);
 
   const setLocale = React.useCallback((next: LocaleId) => {

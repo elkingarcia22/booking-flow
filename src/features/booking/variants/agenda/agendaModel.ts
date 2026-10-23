@@ -67,3 +67,31 @@ export function timesByWindow(slots: readonly Slot[], day: string, items: readon
     .filter((option) => option.barberIds.length > 0 || option.taken);
   return DAY_WINDOWS.map((window) => ({ window, options: options.filter((option) => windowOf(option.time) === window) })).filter((group) => group.options.length > 0);
 }
+
+/**
+ * Lo que propone «otros barberos en la franja que le falta»: para cada franja en que el
+ * elegido no tiene horas, quiénes sí (de las horas de todos ese día), con sus horas, primero
+ * quien tiene más. Las franjas donde nadie más tiene horas no salen.
+ */
+export function windowAlternatives(
+  slots: readonly Slot[],
+  chosenId: string,
+  barberWindows: readonly DayWindow[],
+  isBlocked: (time: string) => boolean = () => false,
+  maxBarbers = 3
+): { window: DayWindow; barbers: { barberId: string; times: string[] }[] }[] {
+  return DAY_WINDOWS.filter((window) => !barberWindows.includes(window))
+    .map((window) => {
+      const byBarber = new Map<string, string[]>();
+      for (const slot of slots) {
+        if (windowOf(slot.time) !== window || isBlocked(slot.time)) continue;
+        for (const id of slot.barberIds) if (id !== chosenId) byBarber.set(id, [...(byBarber.get(id) ?? []), slot.time]);
+      }
+      const barbers = [...byBarber.entries()]
+        .map(([barberId, times]) => ({ barberId, times }))
+        .sort((a, b) => b.times.length - a.times.length)
+        .slice(0, maxBarbers);
+      return { window, barbers };
+    })
+    .filter((offer) => offer.barbers.length > 0);
+}

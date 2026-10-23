@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useLocale } from "@/i18n";
 import type { BookedAppointment } from "./types";
+import { instantOf, offsetLabel } from "@/lib/time/zoned";
 
 /**
  * Fechas, horas y dinero de la reserva. Las horas viajan como ISO local de la
@@ -84,8 +85,9 @@ export function buildIcs(appointments: readonly BookedAppointment[], shopName: s
       "BEGIN:VEVENT",
       `UID:${item.id}@barberlytics`,
       `DTSTAMP:${icsDate(new Date())}`,
-      `DTSTART:${icsDate(start)}`,
-      `DTEND:${icsDate(end)}`,
+      // Con la zona de la sede, el calendario del cliente la pone a la hora correcta aunque viva en otra.
+      item.timeZone ? `DTSTART;TZID=${item.timeZone}:${icsDate(start)}` : `DTSTART:${icsDate(start)}`,
+      item.timeZone ? `DTEND;TZID=${item.timeZone}:${icsDate(end)}` : `DTEND:${icsDate(end)}`,
       `SUMMARY:${icsText(`${shopName} — ${item.serviceNames.join(" + ")}`)}`,
       `LOCATION:${icsText(item.branchName)}`,
       `DESCRIPTION:${icsText(`${item.personName}\nBarbero: ${item.barberName}`)}`,
@@ -112,7 +114,7 @@ export function calendarUrl(provider: CalendarProvider, item: BookedAppointment,
   const title = `${shopName} — ${item.serviceNames.join(" + ")}`;
   const details = `${item.personName}\nBarbero: ${item.barberName}`;
   if (provider === "google") {
-    const params = new URLSearchParams({ action: "TEMPLATE", text: title, dates: `${icsDate(start)}/${icsDate(end)}`, location: item.branchName, details });
+    const params = new URLSearchParams({ action: "TEMPLATE", text: title, dates: `${icsDate(start)}/${icsDate(end)}`, location: item.branchName, details, ...(item.timeZone ? { ctz: item.timeZone } : {}) });
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   if (provider === "yahoo") {
@@ -120,7 +122,9 @@ export function calendarUrl(provider: CalendarProvider, item: BookedAppointment,
     return `https://calendar.yahoo.com/?${params.toString()}`;
   }
   const host = provider === "office" ? "outlook.office.com" : "outlook.live.com";
-  const params = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: title, startdt: isoLocal(start), enddt: isoLocal(end), location: item.branchName, body: details });
+  // Outlook toma la hora con su desfase: así no la corre a la zona de quien la guarda.
+  const withOffset = (date: Date) => (item.timeZone ? `${isoLocal(date)}${offsetLabel(item.timeZone, instantOf(isoLocal(date), item.timeZone))}` : isoLocal(date));
+  const params = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: title, startdt: withOffset(start), enddt: withOffset(end), location: item.branchName, body: details });
   return `https://${host}/calendar/0/deeplink/compose?${params.toString()}`;
 }
 

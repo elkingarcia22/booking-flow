@@ -56,7 +56,7 @@ export function TimeSlotGroups({ groups, onPick, size = "default", className }: 
                 className={cn(
                   "inline-flex items-center justify-center gap-1.5 rounded-full border px-3 tabular-nums transition-[background-color,border-color,transform] duration-fast ease-out-expo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.96] motion-reduce:transition-none",
                   size === "lg" ? "h-11 min-w-[5.5rem]" : "h-9 min-w-[4.75rem]",
-                  option.selected ? "border-primary bg-primary/10" : "border-border bg-surface hover:-translate-y-px hover:border-primary hover:bg-primary/5 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-border disabled:hover:bg-surface"
+                  option.selected ? "border-primary bg-primary/10" : "border-border bg-surface hover:border-primary hover:bg-primary/5 disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-surface"
                 )}
               >
                 {option.selected && <ThemaIcon name="check" size="xs" tone="primary" />}

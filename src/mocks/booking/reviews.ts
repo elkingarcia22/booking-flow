@@ -1,11 +1,13 @@
 import { db } from "../db";
 import { hashOf } from "../customers/seed";
+import { sampleDataOn } from "../sampleData";
 import type { MockReview } from "./state";
 
 /**
- * Las reseñas de los barberos: solo de citas que ocurrieron, una por cita. Las de la demo se
- * derivan del id del barbero (deterministas, no se guardan); las que dejan los clientes se suman
- * en `db.booking.reviews`. El promedio y el conteo que ve el cliente salen de aquí.
+ * Las reseñas de los barberos: solo de citas que ocurrieron, una por cita, en `db.booking.reviews`.
+ * Las de ejemplo (deterministas, del id del barbero) existen solo en la demo (`sampleDataOn`), van
+ * marcadas `sample` y **nunca se mezclan con las reales**: en cuanto un barbero tiene una reseña de un
+ * cliente, se ven solo las suyas. El promedio y el conteo que ve el cliente salen de aquí.
  */
 
 const COMMENTS: readonly string[] = [
@@ -40,6 +42,7 @@ function seeded(barberId: string, now: Date): MockReview[] {
       rating,
       comment: COMMENTS[(h >>> 3) % COMMENTS.length],
       createdAt: new Date(now.getTime() - (2 + ((h >>> 5) % 120)) * DAY_MS).toISOString(),
+      sample: true,
     };
   });
 }
@@ -47,14 +50,15 @@ function seeded(barberId: string, now: Date): MockReview[] {
 /** Todas las reseñas de un barbero, de la más nueva a la más vieja. */
 export function reviewsOf(barberId: string, now = new Date()): MockReview[] {
   const mine = (db.booking.reviews ?? []).filter((review) => review.barberId === barberId);
-  return [...mine, ...seeded(barberId, now)].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const all = mine.length > 0 || !sampleDataOn() ? mine : seeded(barberId, now);
+  return [...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/** El promedio (una cifra decimal) y cuántas: lo que se ve en la tarjeta del barbero. */
-export function ratingOf(barberId: string): { rating: number; reviews: number } {
+/** El promedio (una cifra decimal), cuántas y si son de ejemplo: lo que se ve en la tarjeta del barbero. */
+export function ratingOf(barberId: string): { rating: number; reviews: number; ratingSample: boolean } {
   const all = reviewsOf(barberId);
   const sum = all.reduce((total, review) => total + review.rating, 0);
-  return { rating: all.length === 0 ? 0 : Math.round((sum / all.length) * 10) / 10, reviews: all.length };
+  return { rating: all.length === 0 ? 0 : Math.round((sum / all.length) * 10) / 10, reviews: all.length, ratingSample: all.length > 0 && all.every((review) => review.sample === true) };
 }
 
 export const reviewOfAppointment = (appointmentId: string): MockReview | undefined => (db.booking.reviews ?? []).find((review) => review.appointmentId === appointmentId);

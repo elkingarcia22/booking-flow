@@ -51,6 +51,9 @@ export interface ShellBrand {
    * doc. Con un logo de empresa siempre es `isologo`. Por defecto `wordmark`.
    */
   display?: "isologo" | "wordmark";
+  /** Adónde llevan «Términos» y «Política de privacidad» del pie. Sin ellos son texto sin enlace. */
+  termsHref?: string;
+  privacyHref?: string;
 }
 
 /**
@@ -133,6 +136,8 @@ export interface ShellConfig {
   /** Se llama con el id del nodo y su `path` cuando la persona elige un ítem de navegación. */
   onNavigate?: (id: string, path?: string) => void;
   notifications: readonly NotificationItem[];
+  /** Con él, el pie de la campana marca todo como leído en vez de prometer una lista que no existe. */
+  onMarkAllNotificationsRead?: () => void;
   news: readonly NewsItem[];
   /**
    * Roles que la persona puede asumir desde el menú de perfil. Vacío, el menú

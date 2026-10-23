@@ -20,6 +20,22 @@ export interface CommentMessage {
   createdAt: string
 }
 
+/**
+ * Dónde se dejó un comentario, lo más preciso posible: la ruta, el módulo (la ruta del menú),
+ * la sección (título de la página, pestaña activa y encabezado más cercano) y el elemento
+ * exacto sobre el que se hizo clic. Va a la hoja junto al comentario.
+ */
+export interface CommentLocation {
+  /** La URL dentro de la app, con sus parámetros: «/configuracion/agendamiento?vista=apariencia». */
+  route?: string
+  /** «Configuración › Negocio › Reservas online». */
+  module?: string
+  /** «Reservas online › Apariencia › Apariencia de la reserva». */
+  section?: string
+  /** «Botón «Guardar cambios»». */
+  element?: string
+}
+
 export interface CommentThread {
   id: string
   /** Horizontal, de 0 a 100, en porcentaje del ancho de la capa. */
@@ -33,6 +49,8 @@ export interface CommentThread {
   context?: string
   /** El nombre legible de esa vista, para la lista del panel. */
   contextLabel?: string
+  /** Dónde exactamente se dejó (ruta, módulo, sección y elemento). */
+  location?: CommentLocation
   resolved: boolean
   /** Hay algo en el hilo que la persona actual todavía no ha visto. */
   unread: boolean
@@ -111,6 +129,9 @@ export interface CommentLabels {
   resolved: string
   replies: (count: number) => string
   unreadCount: (count: number) => string
+  whereModule: string
+  whereSection: string
+  whereElement: string
 }
 
 export const DEFAULT_COMMENT_LABELS: CommentLabels = {
@@ -145,4 +166,7 @@ export const DEFAULT_COMMENT_LABELS: CommentLabels = {
   resolved: "Resuelto",
   replies: (count) => (count === 1 ? "1 respuesta" : `${count} respuestas`),
   unreadCount: (count) => (count === 1 ? "1 sin leer" : `${count} sin leer`),
+  whereModule: "Módulo",
+  whereSection: "Sección",
+  whereElement: "Elemento",
 }

@@ -273,6 +273,14 @@ export interface NotificationItem {
   title: string;
   description: string;
   date: string;
+  /** Con id, la campana usa `unread` en vez de marcar las dos primeras como nuevas (datos de demo). */
+  id?: string;
+  unread?: boolean;
+  tone?: "info" | "warning" | "negative" | "positive";
+  /** Abrir lo que lo causó (la cita, la caja, el producto). */
+  onSelect?: () => void;
+  /** Lo que se hace desde el aviso sin abrir nada (llamar, reintentar). */
+  actions?: readonly { id: string; label: string; onSelect: () => void }[];
 }
 
 export const NOTIFICATIONS: readonly NotificationItem[] = [

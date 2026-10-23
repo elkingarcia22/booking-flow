@@ -179,13 +179,21 @@ export const AdminShell: React.FC<AdminShellProps> = ({
       <ThemaLogo size={16} color="var(--color-text-muted)" className="hover:scale-100" />
       <span className="font-bold tracking-tight">{resolved.brand.productName}</span>
       <span className="opacity-50">|</span>
-      <button className="transition-colors hover:text-text-secondary hover:underline">
-        {t("shell.terms")}
-      </button>
+      {resolved.brand.termsHref ? (
+        <a href={resolved.brand.termsHref} target="_blank" rel="noreferrer" className="transition-colors hover:text-text-secondary hover:underline">
+          {t("shell.terms")}
+        </a>
+      ) : (
+        <span>{t("shell.terms")}</span>
+      )}
       <span className="opacity-50">|</span>
-      <button className="transition-colors hover:text-text-secondary hover:underline">
-        {t("shell.privacy")}
-      </button>
+      {resolved.brand.privacyHref ? (
+        <a href={resolved.brand.privacyHref} target="_blank" rel="noreferrer" className="transition-colors hover:text-text-secondary hover:underline">
+          {t("shell.privacy")}
+        </a>
+      ) : (
+        <span>{t("shell.privacy")}</span>
+      )}
     </footer>
   );
 

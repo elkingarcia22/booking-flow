@@ -94,7 +94,6 @@ export function useChatProfiles(kit: ProfilesKit) {
         hint: t("booking.chat.barberHint"),
         otherLabel: t("booking.chat.barberKnow"),
         otherPlaceholder: t("booking.chat.barberKnowPlaceholder"),
-        ...(able.length > 6 ? { searchPlaceholder: t("booking.chat.barberSearch") } : {}),
       }),
       text ?? (part ? t("booking.chat.partLead", { ...part, services: serviceNames(draft.serviceIds) }) : t("booking.chat.barberLead", { services: serviceNames(draft.serviceIds) }))
     );

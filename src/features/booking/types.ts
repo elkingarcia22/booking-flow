@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { bookingAppearanceSchema } from "@/lib/booking/appearance";
+import type { CardTokenInput } from "@/features/payments/gateway";
+import { ONLINE_METHODS } from "@/features/settings/gatewayProviders";
 
 /**
  * El contrato de la reserva en línea (docs/API_CONTRACT.md, «Reserva en
@@ -20,6 +23,14 @@ export const bookingBranchSchema = z.object({
   closesAt: z.string(),
   imageUrl: z.string().nullable(),
   barbers: z.number(),
+  /** La moneda de la sucursal; sin ella, la de la barbería. */
+  currency: z.string().optional(),
+  /** El impuesto de la sucursal, para lo que no trae tasa propia. */
+  taxPercent: z.number().optional(),
+  /** Cómo se paga en línea ahí: lo que deja su pasarela. Vacío = solo en la barbería. */
+  onlineMethods: z.array(z.enum(ONLINE_METHODS)).optional(),
+  /** El país de la sede (CO, US, MX…): decide el texto del consentimiento. */
+  country: z.string().optional(),
 });
 export type BookingBranch = z.infer<typeof bookingBranchSchema>;
 
@@ -31,7 +42,8 @@ export const bookingShopSchema = z.object({
   coverUrl: z.string().nullable(),
   phone: z.string(),
   currency: z.string(),
-  taxPercent: z.number(),
+  /** Los precios ya traen el impuesto (lo normal con IVA). */
+  taxInclusive: z.boolean().optional(),
   minNoticeMinutes: z.number(),
   slotMinutes: z.number(),
   cancelHours: z.number(),
@@ -43,11 +55,15 @@ export const bookingShopSchema = z.object({
   payment: z.object({ card: z.boolean(), payAtShop: z.boolean() }),
   /** El recargo por pagar con tarjeta que la barbería tiene encendido en Configuración, o nada. */
   cardFee: z.object({ name: z.string(), rate: z.number(), type: z.enum(["percent", "amount"]) }).nullable(),
+  /** El cupón de bienvenida que se aplica solo al cliente nuevo; `null` si la barbería no tiene uno. */
+  welcomePromo: z.string().nullable().default(null),
   /** Paquetes que la barbería vende en línea: N visitas de un servicio, con vencimiento. */
   packages: z.array(z.object({ id: z.string(), name: z.string(), serviceId: z.string(), sessions: z.number(), price: z.number(), validDays: z.number(), regular: z.number().default(0) })).default([]),
   /** El anticipo que se pide a algunos clientes para pagar en la barbería, o nada si no se pide. */
   deposit: z.object({ percent: z.number() }).nullable().default(null),
   branches: z.array(bookingBranchSchema),
+  /** La apariencia que eligió la barbería para la reserva; `null` = la general. */
+  appearance: bookingAppearanceSchema.nullable().default(null),
 });
 export type BookingShop = z.infer<typeof bookingShopSchema>;
 
@@ -81,6 +97,8 @@ export const bookingServiceSchema = z.object({
   durationMin: z.number(),
   /** El precio base; cada barbero puede cobrar distinto. */
   price: z.number(),
+  /** La tasa con la que se cobra en esta sucursal; sin ella, la de la sucursal. */
+  taxPercent: z.number().nullable().optional(),
   imageUrl: z.string().nullable(),
   isCombo: z.boolean(),
   popular: z.boolean(),
@@ -100,6 +118,8 @@ export const bookingBarberSchema = z.object({
   gallery: z.array(z.string()),
   rating: z.number(),
   reviews: z.number(),
+  /** Sus reseñas son de ejemplo (solo en la demo): se marcan como tales. */
+  ratingSample: z.boolean().optional(),
   /** Los servicios que hace y lo que cobra por cada uno. */
   prices: z.record(z.string(), z.number()),
 });
@@ -111,6 +131,7 @@ export const bookingProductSchema = z.object({
   description: z.string(),
   category: z.string(),
   price: z.number(),
+  taxPercent: z.number().nullable().optional(),
   imageUrl: z.string().nullable(),
 });
 export type BookingProduct = z.infer<typeof bookingProductSchema>;
@@ -169,6 +190,11 @@ export const bookingCustomerSchema = z.object({
   upcoming: z.number(),
   /** Sus tarjetas guardadas para pagar sin volver a escribirlas. */
   cards: z.array(savedCardSchema).default([]),
+  /**
+   * Reconocido sin código, `cards` viene vacía: esto dice si tiene alguna guardada (sin decir cuál),
+   * para pedirle el código solo si elige pagar con tarjeta.
+   */
+  hasSavedCards: z.boolean().default(false),
   /** Para pagar en la barbería debe dejar anticipo (cliente nuevo o con inasistencias). */
   depositRequired: z.boolean().default(false),
   /** Sus paquetes con visitas por usar (los vencidos o agotados no vienen). */
@@ -224,7 +250,7 @@ export const earliestSchema = z.object({ slot: z.object({ date: z.string(), time
 export type Earliest = z.infer<typeof earliestSchema>;
 
 /** Las reseñas públicas de un barbero: nombre con inicial, nota, comentario y fecha. */
-export const barberReviewSchema = z.object({ id: z.string(), clientName: z.string(), rating: z.number(), comment: z.string(), createdAt: z.string() });
+export const barberReviewSchema = z.object({ id: z.string(), clientName: z.string(), rating: z.number(), comment: z.string(), createdAt: z.string(), sample: z.boolean().optional() });
 export type BarberReview = z.infer<typeof barberReviewSchema>;
 export const barberReviewsSchema = z.object({ items: z.array(barberReviewSchema), total: z.number() });
 export const reviewSavedSchema = z.object({ id: z.string(), rating: z.number() });
@@ -234,7 +260,8 @@ export const packagePurchasedSchema = z.object({ package: ownedPackageSchema, pa
 export type PackagePurchased = z.infer<typeof packagePurchasedSchema>;
 export interface PackagePurchaseInput {
   packageId: string;
-  card?: { number: string; name: string; expiry: string; save: boolean };
+  /** La tarjeta nueva como token de la pasarela (`tokenizeCard`): el número y el CVC no viajan aquí. */
+  card?: CardTokenInput;
   savedCardId?: string;
 }
 
@@ -249,7 +276,8 @@ export interface GiftPurchaseInput {
   recipientName: string;
   recipientContact: string;
   message: string;
-  card?: { number: string; name: string; expiry: string; save: boolean };
+  /** La tarjeta nueva como token de la pasarela (`tokenizeCard`): el número y el CVC no viajan aquí. */
+  card?: CardTokenInput;
   savedCardId?: string;
 }
 
@@ -285,6 +313,8 @@ export const bookedAppointmentSchema = z.object({
   reservationId: z.string().nullable(),
   branchId: z.string(),
   branchName: z.string(),
+  /** La zona de la sede: la hora de la cita es la de allí. */
+  timeZone: z.string().optional(),
   personName: z.string(),
   guestRelation: z.string().nullable(),
   serviceIds: z.array(z.string()),
@@ -316,6 +346,7 @@ export const totalsSchema = z.object({
   discount: z.number(),
   subtotal: z.number(),
   tax: z.number(),
+  taxIncluded: z.boolean().optional(),
   tip: z.number(),
   /** El recargo por pagar con tarjeta (0 si se paga en la barbería o no hay recargo). */
   fee: z.number().default(0),
@@ -327,7 +358,8 @@ export const totalsSchema = z.object({
 });
 
 /** `gift`: la tarjeta de regalo cubre todo y no hay nada más que cobrar. */
-export const payMethodSchema = z.enum(["card", "wallet", "shop", "credit", "gift"]);
+/** `pse` y `nequi`: los métodos de Colombia, cuando la pasarela de la sucursal los tiene. */
+export const payMethodSchema = z.enum(["card", "wallet", "shop", "credit", "gift", "pse", "nequi"]);
 export type PayMethod = z.infer<typeof payMethodSchema>;
 
 export const reservationSchema = z.object({
@@ -374,6 +406,8 @@ export interface NewCustomerInput {
   lastName: string;
   email: string;
   marketing: boolean;
+  /** La sede por la que entra: su país decide el texto que aceptó. */
+  branchId?: string | null;
 }
 
 export interface ReservationItemInput {
@@ -399,10 +433,10 @@ export interface ReservationInput {
   promoCode: string | null;
   method: PayMethod;
   /**
-   * Tarjeta nueva. El CVC no viaja a nuestro servidor: va directo a la pasarela
-   * (aquí, simulada). `save` la guarda tokenizada para la próxima.
+   * Tarjeta nueva, como token de la pasarela (`tokenizeCard`): el número y el CVC van a la pasarela,
+   * nunca a nuestro servidor. `save` la guarda tokenizada para la próxima.
    */
-  card?: { number: string; name: string; expiry: string; save: boolean };
+  card?: CardTokenInput;
   /** O una tarjeta guardada; se le pide el CVC otra vez en el celular, que tampoco viaja aquí. */
   savedCardId?: string;
   /** Tarjeta de regalo: paga primero; lo que sobra queda en ella. */

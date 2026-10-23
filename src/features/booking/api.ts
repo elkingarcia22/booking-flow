@@ -89,7 +89,8 @@ export const bookingApi = {
   /** Cambia titular o vencimiento de una tarjeta guardada; devuelve el perfil con sus tarjetas al día. */
   updateCard: (token: string, id: string, input: SavedCardInput) => api.patch<BookingCustomer>(`/booking/me/cards/${id}`, input, { headers: session(token), schema: bookingCustomerSchema }),
   removeCard: (token: string, id: string) => api.delete<BookingCustomer>(`/booking/me/cards/${id}`, { headers: session(token), schema: bookingCustomerSchema }),
-  checkPromo: (token: string | null, input: { code: string; appointments: number }) =>
+  /** Con la sede y los servicios: el servidor mira fechas, topes y si el cupón vale para esos servicios. */
+  checkPromo: (token: string | null, input: { code: string; appointments: number; branchId?: string | null; serviceIds?: readonly string[] }) =>
     api.post<Promo>("/booking/promo", input, { headers: token ? session(token) : undefined, schema: promoSchema }),
   reserve: (token: string, input: ReservationInput) => api.post<Reservation>("/booking/reservations", input, { headers: session(token), schema: reservationSchema, timeoutMs: 30_000 }),
   checkPhone: (phone: string) => api.post<PhoneCheck>("/booking/phone/check", { phone }, { schema: phoneCheckSchema }),

@@ -38,7 +38,8 @@ export function SegmentedGroup<T extends string>({ label, value, onChange, optio
   );
 
   return (
-    <fieldset className={cn("space-y-2", className)} data-testid={testId}>
+    // `min-w-0`: un fieldset no encoge por debajo de su contenido y desbordaba los paneles estrechos.
+    <fieldset className={cn("min-w-0 space-y-2", className)} data-testid={testId}>
       <legend className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">{label}</legend>
       <SegmentedControl fullWidth ariaLabel={label} options={segments} value={value} onChange={(next) => onChange(next as T)} />
       {hint && <p className="text-xs text-text-muted">{hint}</p>}

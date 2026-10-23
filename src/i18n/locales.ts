@@ -21,7 +21,9 @@ export interface LocaleOption {
 export const LOCALES: readonly LocaleOption[] = [
   { id: "es", nativeName: "Español", name: "Español", intl: "es-CO" },
   { id: "en", nativeName: "English", name: "Inglés", intl: "en-US" },
-  { id: "fr", nativeName: "Français", name: "Francés", intl: "fr-FR" },
+  // Francés apagado por ahora (2026-10-21): las traducciones siguen en `messages/`; para reactivarlo,
+  // descomenta esta línea.
+  // { id: "fr", nativeName: "Français", name: "Francés", intl: "fr-FR" },
 ];
 
 /**

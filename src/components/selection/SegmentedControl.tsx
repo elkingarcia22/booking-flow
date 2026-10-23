@@ -59,7 +59,8 @@ export function SegmentedControl({
   const segmentBase = cn(
     'relative flex items-center justify-center transition-all duration-200 outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-primary',
     size === 'sm' ? 'px-3 py-1.5 text-[11px]' : 'px-4 py-2 text-xs',
-    fullWidth ? 'flex-1' : 'flex-initial min-w-[80px]'
+    // A lo ancho, cada parte puede encogerse (el texto se recorta) en vez de desbordar el contenedor.
+    fullWidth ? 'flex-1 min-w-0' : 'flex-initial min-w-[80px]'
   )
 
   return (

@@ -18,6 +18,7 @@ import { usePaymentController, type PaymentController } from "../../flow/usePaym
 import { GiftStep } from "../../steps/GiftStep";
 import { PackagesStep } from "../../steps/PackagesStep";
 import type { ChatTurn, PaymentEvent } from "./chatKit";
+import { ChatCardSheets } from "./ChatCardSheets";
 import { ChatHome } from "./ChatHome";
 import { useChatBooking, type ChatEngine } from "./useChatBooking";
 import { BookingVoice } from "./BookingVoice";
@@ -49,7 +50,7 @@ function PaymentBridge({ controllerRef, onEvent }: { controllerRef: React.RefObj
   React.useEffect(() => {
     if (error) onEventRef.current({ kind: "failed", message: describeError(error).description });
   }, [error]);
-  return <PaymentSheets payment={payment} />;
+  return <PaymentSheets payment={payment} askCodeHere={false} />;
 }
 
 /** Un mensaje del asistente: su marca, lo que dice y, si es la pregunta abierta, su lista para responder. */
@@ -192,6 +193,7 @@ export function ChatFlow({ headerTrailing, onFinish }: ChatFlowProps) {
         }}
       />
       {state.customer && <PaymentBridge key={state.customer.id} controllerRef={controllerRef} onEvent={engine.onPaymentEvent} />}
+      <ChatCardSheets card={engine.card} />
 
       {/* El resumen ocupa todo el alto: la cabecera llega hasta el panel. */}
       <div className="flex min-h-0 flex-1">

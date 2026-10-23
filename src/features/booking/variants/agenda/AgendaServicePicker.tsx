@@ -10,8 +10,7 @@ import { useBookingFlow } from "../../flow/BookingContext";
 import { toastMissing } from "../../flow/missingData";
 import type { BookingService } from "../../types";
 import { fromPrice, itemDuration, itemPrice } from "../../useBookingTotals";
-import { PickerField, PickerOverlay, PickerRow, PickerSearch } from "./AgendaPicker";
-import { PICKER_SEARCH_FROM, plainText as plain } from "./pickerSearch";
+import { PickerField, PickerOverlay, PickerRow } from "./AgendaPicker";
 
 /** Cuántos nombres caben en el campo antes de resumir con «y N más». */
 const NAMES_SHOWN = 2;
@@ -93,16 +92,14 @@ function ServicePickerOverlay({ open, onOpenChange, initial, onApply }: ServiceP
     if (toastMissing(t, [picked.length === 0 && t("booking.services.pick")])) return;
     onApply(picked);
   };
-  const [query, setQuery] = React.useState("");
   const listRef = React.useRef<HTMLDivElement>(null);
 
-  // Cada vez que se abre arranca de lo que ya está elegido, sin búsqueda vieja.
+  // Cada vez que se abre arranca de lo que ya está elegido.
   const [wasOpen, setWasOpen] = React.useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
       setPicked(initial);
-      setQuery("");
     }
   }
 
@@ -134,7 +131,7 @@ function ServicePickerOverlay({ open, onOpenChange, initial, onApply }: ServiceP
 
   return (
     <PickerOverlay open={open} onOpenChange={onOpenChange} title={t("booking.agenda.whatTitle")} description={t("booking.agenda.whatLead")} footer={footer} focusRef={listRef}>
-      <ServicePickerList ref={listRef} picked={picked} onToggle={toggle} query={query} onQueryChange={setQuery} />
+      <ServicePickerList ref={listRef} picked={picked} onToggle={toggle} />
     </PickerOverlay>
   );
 }
@@ -142,32 +139,22 @@ function ServicePickerOverlay({ open, onOpenChange, initial, onApply }: ServiceP
 interface ServicePickerListProps {
   picked: readonly string[];
   onToggle: (serviceId: string) => void;
-  query: string;
-  onQueryChange: (query: string) => void;
 }
 
-/** La lista de la carta: buscador si hay muchos, agrupada por categoría y con casilla por fila (se pueden varios). */
-const ServicePickerList = React.forwardRef<HTMLDivElement, ServicePickerListProps>(function ServicePickerList({ picked, onToggle, query, onQueryChange }, ref) {
+/** La lista de la carta: agrupada por categoría y con casilla por fila (se pueden varios). */
+const ServicePickerList = React.forwardRef<HTMLDivElement, ServicePickerListProps>(function ServicePickerList({ picked, onToggle }, ref) {
   const t = useAppT();
   const { state, catalog, fmt } = useBookingFlow();
   // El barbero se elige antes: con uno elegido, solo lo que él hace.
   const barber = catalog?.barbers.find((item) => item.id === state.draft?.barberId);
   const services = (catalog?.services ?? []).filter((service) => !barber || barber.prices[service.id] !== undefined);
-  const needle = plain(query.trim());
-  const visible = needle === "" ? services : services.filter((service) => plain(`${service.name} ${service.description} ${service.category}`).includes(needle));
-  // Por categoría mientras no se busca; buscando, una sola lista con lo que coincide.
-  const groups =
-    needle === "" ? [...new Set(visible.map((service) => service.category))].map((category) => ({ category, items: visible.filter((service) => service.category === category) })) : [{ category: "", items: visible }];
+  const groups = [...new Set(services.map((service) => service.category))].map((category) => ({ category, items: services.filter((service) => service.category === category) }));
   const showHeadings = groups.length > 1;
 
   return (
     <div ref={ref} className="flex flex-col">
-      {services.length >= PICKER_SEARCH_FROM && <PickerSearch value={query} onChange={onQueryChange} placeholder={t("booking.services.search")} />}
-
       {services.length === 0 ? (
         <EmptyState icon="scissors" title={t("booking.services.emptyBranch")} />
-      ) : visible.length === 0 ? (
-        <EmptyState icon="search" title={t("booking.services.empty")} />
       ) : (
         <div className="flex flex-col gap-4 px-2 pb-3 pt-1">
           {groups.map((group) => (

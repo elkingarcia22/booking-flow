@@ -4,10 +4,18 @@ import { WALK_IN_CLIENT, clockOf, dateKey, parseClock, type MockAppointment, typ
 import { appointmentsOn, barbersIn, clashMessage, hoursOn } from "../calendar/handlers";
 import { profileOf } from "../customers/handlers";
 import { depositOf } from "@/features/booking/pricing";
+import { productPriceIn, servicePriceIn } from "../catalogPrices";
+import { accountTaxPercent, branchCountry, branchHours, branchCurrency, branchNow, branchOnlineMethods, branchTaxPercent, branchTimeZone, itemTaxPercent, startInstant, taxInclusive } from "../settings/branchRules";
 import { ratingOf, reviewOfAppointment } from "./reviews";
 import { activePackages, packageOffers } from "./packages";
 import { hashOf } from "../customers/seed";
+import { stockLevel } from "../inventory/stock";
 import { BLOCKED_PHONE, DEMO_CARDS, DEMO_GUESTS_CLIENT, DEMO_PHONES, type MockReservation, type MockSavedCard } from "./state";
+import { consentCountryOf } from "@/features/legal/consent";
+import { closedForHoliday } from "@/features/settings/countryPack";
+import { welcomeCoupon } from "../marketing/coupons";
+import { fitsInHours, hoursOnDate } from "@/features/branches/branchHours";
+import type { BookingAppearance } from "@/lib/booking/appearance";
 
 /**
  * Las derivaciones de la reserva en línea: lo que ve el cliente sale de lo
@@ -37,6 +45,7 @@ const booking = () => db.settings.sections.booking as {
   lateFeePercent: number;
   maxCancellations: number;
   policy: string;
+  appearance?: BookingAppearance;
 };
 
 export const bookingRules = () => {
@@ -44,9 +53,6 @@ export const bookingRules = () => {
   const unit = rules.minNoticeUnit === "hours" ? 60 : rules.minNoticeUnit === "days" ? 1440 : 1;
   return { ...rules, minNoticeMinutes: rules.minNotice * unit };
 };
-
-export const taxPercent = (): number =>
-  ((db.settings.lists.taxGroups[0]?.taxes as { percent: number }[] | undefined) ?? []).reduce((sum, tax) => sum + tax.percent, 0);
 
 export const tipOptions = () => db.settings.sections.tips as { options: { id: string; type: "percent" | "amount"; value: number }[]; defaultId: string | null };
 
@@ -56,13 +62,14 @@ export const bookableBarbers = (branchId: string) => barbersIn(branchId).filter(
 const memberOf = (id: string) => db.team.members.find((member) => member.id === id);
 
 /** Lo que cobra un barbero por un servicio, o `null` si no lo hace. */
-export function barberPrice(barberId: string, serviceId: string): number | null {
+export function barberPrice(barberId: string, serviceId: string, branchId?: string): number | null {
   const member = memberOf(barberId);
   const service = db.services.items.find((item) => item.id === serviceId);
   if (!member || !service) return null;
   const override = member.services.find((item) => item.serviceId === serviceId);
   if (override && !override.offered) return null;
-  return override?.price ?? service.price;
+  // Su precio en Equipo; si no tiene, el de la sucursal (la que se pide o la suya) o el general.
+  return override?.price ?? servicePriceIn(serviceId, branchId ?? member.homeBranchId);
 }
 
 export const publicServicesIn = (branchId: string) =>
@@ -72,24 +79,32 @@ export const serviceName = (id: string) => db.services.items.find((item) => item
 export const durationOf = (serviceIds: readonly string[]) =>
   serviceIds.reduce((sum, id) => sum + (db.services.items.find((item) => item.id === id)?.durationMin ?? 0), 0);
 
+/**
+ * El horario de hoy de la sede: el suyo (Configuración › Sucursales), recortado a lo que trabaja el equipo ese
+ * día. Si hoy cierra, el de la sede tal cual (la reserva dirá que no hay horas).
+ */
 export function branchHoursToday(branchId: string): { opensAt: string; closesAt: string } {
-  const today = dateKey(new Date());
+  // «Hoy» es el de la sucursal, no el de quien reserva desde otra zona.
+  const today = branchNow(branchId).slice(0, 10);
+  const own = hoursOnDate(branchHours(branchId), today);
   const ranges = bookableBarbers(branchId).flatMap((barber) => {
     const member = memberOf(barber.id);
     return member ? hoursOn(member, today) : [];
   });
-  if (ranges.length === 0) {
-    const business = db.settings.sections.business as { openTime: string; closeTime: string };
-    return { opensAt: business.openTime, closesAt: business.closeTime };
+  if (!own || ranges.length === 0) {
+    const fallback = own ?? Object.values(branchHours(branchId)).find((day) => day !== null) ?? { open: "09:00", close: "19:00" };
+    return { opensAt: fallback.open, closesAt: fallback.close };
   }
   return {
-    opensAt: clockOf(Math.min(...ranges.map((range) => parseClock(range.start)))),
-    closesAt: clockOf(Math.max(...ranges.map((range) => parseClock(range.end)))),
+    opensAt: clockOf(Math.max(parseClock(own.open), Math.min(...ranges.map((range) => parseClock(range.start))))),
+    closesAt: clockOf(Math.min(parseClock(own.close), Math.max(...ranges.map((range) => parseClock(range.end))))),
   };
 }
 
 export function shop() {
   const rules = bookingRules();
+  // La apariencia propia de la reserva (Configuración › Reserva online); sin ella, la general.
+  const appearance = rules.appearance && !rules.appearance.useGeneral ? rules.appearance : null;
   const tips = tipOptions();
   const company = db.settings.sections.company as { name: string; phone: string };
   const branches = (db.settings.lists.branches as unknown as { id: string; name: string; address: string; city: string; phone: string; status: string }[])
@@ -103,22 +118,31 @@ export function shop() {
       ...branchHoursToday(branch.id),
       imageUrl: BRANCH_PHOTOS[branch.id] ?? null,
       barbers: bookableBarbers(branch.id).length,
+      // Cada sucursal cobra en su moneda, con su impuesto y con los métodos de su pasarela.
+      currency: branchCurrency(branch.id),
+      taxPercent: branchTaxPercent(branch.id),
+      onlineMethods: branchOnlineMethods(branch.id),
+      /** El país de la sede (para el texto del consentimiento). */
+      country: consentCountryOf(branchCountry(branch.id)),
     }));
   return {
     // La marca de la barbería tal como la subió en Identidad; sin ella, Barberlytics.
     name: db.branding.name ?? "Barberlytics",
-    logoUrl: db.branding.logo,
-    logoDarkUrl: db.branding.logoDark,
+    // Un logo propio de la reserva gana al de Identidad de marca.
+    logoUrl: appearance?.logo ?? db.branding.logo,
+    logoDarkUrl: appearance?.logo ? appearance.logoDark : db.branding.logoDark,
     coverUrl: COVER,
     phone: company.phone,
     currency: (db.settings.sections.pricing as { currency: string }).currency,
-    taxPercent: taxPercent(),
+    taxInclusive: taxInclusive(),
     minNoticeMinutes: rules.minNoticeMinutes,
     slotMinutes: rules.slotInterval,
     cancelHours: rules.cancelHours,
     lateFeePercent: rules.lateFeePercent,
     maxCancellations: rules.maxCancellations,
     policy: rules.policy,
+    // El cupón de bienvenida que la reserva aplica sola al cliente nuevo (Configuración › Cupones).
+    welcomePromo: welcomeCoupon(),
     tipOptions: tips.options,
     defaultTipId: tips.defaultId,
     payment: rules.paymentMethods,
@@ -127,6 +151,7 @@ export function shop() {
     packages: rules.paymentMethods.card ? packageOffers().map((offer) => ({ ...offer, regular: (db.services.items.find((item) => item.id === offer.serviceId)?.price ?? 0) * offer.sessions })) : [],
     deposit: rules.deposit.enabled && rules.paymentMethods.payAtShop && rules.paymentMethods.card ? { percent: rules.deposit.percent } : null,
     branches,
+    appearance,
   };
 }
 
@@ -143,7 +168,7 @@ export function catalog(branchId: string) {
   const barbers = bookableBarbers(branchId).map((barber) => {
     const member = memberOf(barber.id);
     const prices = Object.fromEntries(services.flatMap((service) => {
-      const price = barberPrice(barber.id, service.id);
+      const price = barberPrice(barber.id, service.id, branchId);
       return price === null ? [] : [[service.id, price]];
     }));
     return {
@@ -162,8 +187,9 @@ export function catalog(branchId: string) {
     };
   });
   const products = db.products.items
-    .filter((item) => item.visibility === "public" && item.sellable && item.activeBranchIds.includes(branchId))
-    .map((item) => ({ id: item.id, name: item.name, description: item.description, category: db.products.categories.find((category) => category.id === item.categoryId)?.name ?? "", price: item.price, imageUrl: item.imageUrl }));
+    // Lo agotado en la sucursal no se ofrece en línea.
+    .filter((item) => item.visibility === "public" && item.sellable && item.activeBranchIds.includes(branchId) && stockLevel(branchId, item.id).onHand > 0)
+    .map((item) => ({ id: item.id, name: item.name, description: item.description, category: db.products.categories.find((category) => category.id === item.categoryId)?.name ?? "", price: productPriceIn(item.id, branchId), taxPercent: itemTaxPercent(item.taxRate, branchId), imageUrl: item.imageUrl }));
   return {
     services: services.map((item) => ({
       id: item.id,
@@ -171,7 +197,9 @@ export function catalog(branchId: string) {
       description: item.description,
       category: db.services.categories.find((category) => category.id === item.categoryId)?.name ?? "",
       durationMin: item.durationMin,
-      price: item.price,
+      price: servicePriceIn(item.id, branchId),
+      // La tasa con la que se cobra en esta sucursal: la del servicio o, si no tiene, la de la sucursal.
+      taxPercent: itemTaxPercent(item.taxRate, branchId),
       imageUrl: item.imageUrl,
       isCombo: item.kind === "combo",
       popular: POPULAR.has(item.id),
@@ -181,16 +209,23 @@ export function catalog(branchId: string) {
   };
 }
 
-const isClosed = (branchId: string, day: string): boolean =>
+/** Los festivos en que cierra el negocio (Configuración › Perfil del negocio), por motivo. */
+const closedHolidays = (): readonly string[] => (db.settings.sections.business as { holidays?: string[] } | undefined)?.holidays ?? [];
+
+/** Cerrado por un cierre de la sede, por un festivo de su país en que el negocio no abre o porque ese día no abre. */
+export const isClosed = (branchId: string, day: string): boolean =>
   (db.settings.lists.closures as unknown as { startDate: string; endDate: string; branchIds: string[] }[]).some(
     (closure) => closure.branchIds.includes(branchId) && closure.startDate <= day && day <= closure.endDate
-  );
+  ) ||
+  closedForHoliday(branchCountry(branchId), closedHolidays(), day) !== null ||
+  hoursOnDate(branchHours(branchId), day) === null;
 
 /** ¿Puede este barbero atender a esa hora, todo el tramo, sin pisar nada? */
 export function barberFree(branchId: string, barberId: string, day: string, startMinute: number, durationMin: number, excludeId?: string): boolean {
   const member = memberOf(barberId);
   if (!member) return false;
-  const fits = hoursOn(member, day).some((range) => parseClock(range.start) <= startMinute && startMinute + durationMin <= parseClock(range.end));
+  // Dentro de su horario y del de la sede: nadie atiende con la barbería cerrada.
+  const fits = fitsInHours(hoursOnDate(branchHours(branchId), day), startMinute, durationMin) && hoursOn(member, day).some((range) => parseClock(range.start) <= startMinute && startMinute + durationMin <= parseClock(range.end));
   return fits && clashMessage(branchId, barberId, day, startMinute, durationMin, excludeId) === null;
 }
 
@@ -201,8 +236,10 @@ export function availability(branchId: string, day: string, serviceIds: readonly
   const durationMin = Math.max(rules.slotInterval, durationOf(serviceIds));
   appointmentsOn(branchId, day);
   const candidates = bookableBarbers(branchId).filter((barber) => (barberId ? barber.id === barberId : true) && serviceIds.every((id) => barberPrice(barber.id, id) !== null));
-  const now = new Date();
-  const earliest = day === dateKey(now) ? now.getHours() * 60 + now.getMinutes() + rules.minNoticeMinutes : day < dateKey(now) ? Number.MAX_SAFE_INTEGER : 0;
+  // Lo que ya pasó se mide con el reloj de la sucursal: quien reserva desde otra zona ve las horas de la sede.
+  const nowLocal = branchNow(branchId);
+  const today = nowLocal.slice(0, 10);
+  const earliest = day === today ? parseClock(nowLocal.slice(11, 16)) + rules.minNoticeMinutes : day < today ? Number.MAX_SAFE_INTEGER : 0;
   const { opensAt, closesAt } = branchHoursToday(branchId);
   const slots: { time: string; barberIds: string[] }[] = [];
   for (let minute = parseClock(opensAt); minute + durationMin <= parseClock(closesAt); minute += rules.slotInterval) {
@@ -239,13 +276,14 @@ export function customerOf(client: MockClient) {
   const profile = profileOf(client);
   const mine = db.calendar.appointments.filter((item) => item.clientId === client.id);
   const now = Date.now();
-  const last = [...mine].filter((item) => item.status === "paid" || new Date(item.start).getTime() < now).sort((a, b) => b.start.localeCompare(a.start))[0];
+  const last = [...mine].filter((item) => item.status === "paid" || startInstant(item).getTime() < now).sort((a, b) => b.start.localeCompare(a.start))[0];
   const barberId = last?.barberId ?? client.preferredBarberId;
   const lastVisit = last
     ? { branchId: last.branchId, serviceIds: last.serviceIds, barberId, at: last.start }
     : client.visits > 0
       ? { branchId: profile.branchId, serviceIds: ["svc_corte"], barberId, at: client.lastVisitAt ?? new Date().toISOString() }
       : null;
+  const cards = cardsOf(client.id);
   return {
     id: client.id,
     firstName: client.name.split(" ")[0] ?? client.name,
@@ -257,8 +295,9 @@ export function customerOf(client: MockClient) {
     guests: profile.guests.map((guest) => ({ id: guest.id, name: guest.name, relation: guest.relation })),
     lastVisit,
     credit: db.booking.credits[client.id] ?? 0,
-    upcoming: mine.filter((item) => isLive(item) && item.status === "scheduled" && new Date(item.start).getTime() >= now).length,
-    cards: cardsOf(client.id),
+    upcoming: mine.filter((item) => isLive(item) && item.status === "scheduled" && startInstant(item).getTime() >= now).length,
+    cards,
+    hasSavedCards: cards.length > 0,
     depositRequired: needsDeposit(client, client.visits === 0 && !last),
     loyalty: loyaltyOf(client),
     packages: activePackages(client.id).map(({ id, name, serviceId, remaining, total, expiresAt }) => ({ id, name, serviceId, remaining, total, expiresAt })),
@@ -337,14 +376,16 @@ export function bookedOf(item: MockAppointment) {
   const link = reservationOf(item.id);
   const member = memberOf(item.barberId);
   const branch = (db.settings.lists.branches as unknown as { id: string; name: string }[]).find((entry) => entry.id === item.branchId);
-  const price = link?.line.price ?? item.serviceIds.reduce((sum, id) => sum + (barberPrice(item.barberId, id) ?? 0), 0);
-  const status = item.status === "cancelled" ? "cancelled" : item.status === "no_show" ? "no_show" : item.status === "paid" ? "completed" : new Date(item.start).getTime() + item.durationMin * 60_000 < Date.now() ? "completed" : "scheduled";
+  const price = link?.line.price ?? item.serviceIds.reduce((sum, id) => sum + (barberPrice(item.barberId, id, item.branchId) ?? 0), 0);
+  const status = item.status === "cancelled" ? "cancelled" : item.status === "no_show" ? "no_show" : item.status === "paid" ? "completed" : startInstant(item).getTime() + item.durationMin * 60_000 < Date.now() ? "completed" : "scheduled";
   return {
     review: reviewOfAppointment(item.id) ? { rating: reviewOfAppointment(item.id)?.rating ?? 0 } : null,
     id: item.id,
     reservationId: link?.reservation.id ?? null,
     branchId: item.branchId,
     branchName: branch?.name ?? item.branchId,
+    /** La zona de la sede: la hora de la cita es la de allí (para el .ics y los enlaces de calendario). */
+    timeZone: branchTimeZone(item.branchId),
     personName: link?.line.guestName ?? db.calendar.clients.find((client) => client.id === item.clientId)?.name ?? "",
     guestRelation: link?.line.guestRelation ?? null,
     serviceIds: item.serviceIds,
@@ -387,7 +428,7 @@ export function reservationView(reservation: MockReservation) {
 export function myAppointments(clientId: string) {
   const now = Date.now();
   const mine = db.calendar.appointments.filter((item) => item.clientId === clientId).map(bookedOf);
-  const upcoming = mine.filter((item) => item.status === "scheduled" && new Date(item.start).getTime() >= now).sort((a, b) => a.start.localeCompare(b.start));
+  const upcoming = mine.filter((item) => item.status === "scheduled" && startInstant(item).getTime() >= now).sort((a, b) => a.start.localeCompare(b.start));
   const past = mine.filter((item) => !upcoming.includes(item)).sort((a, b) => b.start.localeCompare(a.start)).slice(0, 12);
   const reservations = db.booking.reservations.filter((item) => item.customerId === clientId).map(reservationView);
   return { upcoming, past, reservations };
@@ -405,7 +446,7 @@ const USUAL_FALLBACK = [600, 660, 900, 1020];
 /** La hora a la que suele venir: la mediana de sus citas pasadas, o una estable por cliente. */
 function usualMinute(client: MockClient): number {
   const past = db.calendar.appointments
-    .filter((item) => item.clientId === client.id && isLive(item) && new Date(item.start).getTime() < Date.now())
+    .filter((item) => item.clientId === client.id && isLive(item) && startInstant(item).getTime() < Date.now())
     .map((item) => parseClock(item.start.slice(11, 16)))
     .sort((a, b) => a - b);
   if (past.length > 0) return past[Math.floor(past.length / 2)];
@@ -470,9 +511,8 @@ const DAYS_IN_WEEK = 7;
 
 /**
  * El perfil de una sede: lo que se mira antes de elegirla. La descripción, la
- * dirección y el teléfono son los de Configuración › Sucursales; el horario de
- * cada día sale del que trabaja el equipo ese día (desde que entra el primero
- * hasta que sale el último), y un día sin nadie es un día cerrado.
+ * dirección, el teléfono y el horario de cada día son los de Configuración ›
+ * Sucursales; un día que la sede abre pero sin nadie del equipo sale cerrado.
  */
 export function branchDetail(branchId: string) {
   const branch = (db.settings.lists.branches as unknown as { id: string; name: string; address: string; city: string; state: string; zipcode: string; phone: string; description: string; status: string }[]).find(
@@ -480,13 +520,12 @@ export function branchDetail(branchId: string) {
   );
   if (!branch) return null;
   const members = bookableBarbers(branchId).map((barber) => memberOf(barber.id)).filter((member) => member !== undefined);
+  // El horario que publica la sede; un día que abre pero sin nadie del equipo se muestra cerrado.
+  const week = branchHours(branchId);
   const hours = Array.from({ length: DAYS_IN_WEEK }, (_, day) => {
-    const ranges = members.flatMap((member) => {
-      const range = member.schedule[String(day)];
-      return range ? [range] : [];
-    });
-    if (ranges.length === 0) return { day, opensAt: null, closesAt: null };
-    return { day, opensAt: clockOf(Math.min(...ranges.map((range) => parseClock(range.start)))), closesAt: clockOf(Math.max(...ranges.map((range) => parseClock(range.end)))) };
+    const own = week[String(day) as keyof typeof week];
+    const staffed = members.some((member) => member.schedule[String(day)]);
+    return own && staffed ? { day, opensAt: own.open, closesAt: own.close } : { day, opensAt: null, closesAt: null };
   });
   const business = db.settings.sections.business as { website: string; instagram: string; facebook: string };
   const own = BRANCH_PHOTOS[branchId];
@@ -512,4 +551,12 @@ export function branchDetail(branchId: string) {
       .filter((closure) => closure.branchIds.includes(branchId) && closure.endDate >= dateKey(new Date()))
       .map((closure) => ({ startDate: closure.startDate, endDate: closure.endDate, description: closure.description })),
   };
+}
+
+/** La tasa media de una reserva en su sucursal: cada servicio (al precio de su barbero) y cada producto con la suya. */
+export function reservationTaxPercent(branchId: string, planned: readonly { barberId: string; serviceIds: readonly string[] }[], products: readonly { productId: string; price: number; qty: number }[]): number {
+  return accountTaxPercent(branchId, {
+    services: planned.flatMap((item) => item.serviceIds.map((serviceId) => ({ id: serviceId, amount: barberPrice(item.barberId, serviceId, branchId) ?? 0 }))),
+    products: products.map((line) => ({ id: line.productId, amount: line.price * line.qty })),
+  });
 }

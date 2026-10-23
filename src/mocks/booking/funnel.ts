@@ -1,5 +1,6 @@
 import { db } from "../db";
 import { hashOf } from "../customers/seed";
+import { sampleDataOn } from "../sampleData";
 import type { MockFunnelEvent } from "./state";
 
 /**
@@ -39,10 +40,31 @@ function demoEvents(now: Date): MockFunnelEvent[] {
   return out;
 }
 
+/**
+ * Las sesiones que empezaron la reserva en un rango y cuántas terminaron reservando, por de dónde
+ * vinieron: las reales o, solo en la demo, las de ejemplo. Las dos cifras salen del mismo embudo:
+ * nunca se cruzan visitas de ejemplo con reservas reales.
+ */
+export function sessionsBySource(from: Date, to: Date, now = new Date()): { bySource: Map<string, { sessions: number; bookings: number }>; sample: boolean } {
+  const inRange = (event: MockFunnelEvent) => new Date(event.at) >= from && new Date(event.at) <= to;
+  const real = events().filter(inRange);
+  const sample = real.length === 0 && sampleDataOn();
+  const list = sample ? demoEvents(now).filter(inRange) : real;
+  const booked = new Set(list.filter((event) => event.step === "confirmed").map((event) => event.sessionId));
+  const bySource = new Map<string, { sessions: number; bookings: number }>();
+  const started = new Map<string, string>();
+  for (const event of list.filter((item) => item.step === "phone")) started.set(event.sessionId, event.source);
+  for (const [sessionId, source] of started) {
+    const row = bySource.get(source) ?? { sessions: 0, bookings: 0 };
+    bySource.set(source, { sessions: row.sessions + 1, bookings: row.bookings + (booked.has(sessionId) ? 1 : 0) });
+  }
+  return { bySource, sample };
+}
+
 export function funnelSummary(days: number, now = new Date()) {
   const from = now.getTime() - days * DAY_MS;
   const real = events().filter((event) => new Date(event.at).getTime() >= from);
-  const demo = real.length === 0;
+  const demo = real.length === 0 && sampleDataOn();
   const list = demo ? demoEvents(now) : real;
   const sessionsAt = (step: FunnelStep) => new Set(list.filter((event) => event.step === step).map((event) => event.sessionId));
   const started = sessionsAt("phone").size;

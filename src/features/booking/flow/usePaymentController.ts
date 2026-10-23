@@ -1,12 +1,14 @@
 import * as React from "react";
-import { CreditCard, Smartphone, Store, Wallet } from "lucide-react";
+import { Building2, CreditCard, Smartphone, Store, Wallet } from "lucide-react";
 import { useAppT } from "@/app/i18n";
 import type { SelectionOption } from "@/components/selection";
 import { isApiError } from "@/lib/api";
 import { depositOf, feeLabel } from "../pricing";
 import { useReserveMutation } from "../queries";
+import { activeBranch } from "../useBookingTotals";
 import type { PayMethod } from "../types";
 import { useBookingFlow } from "./BookingContext";
+import { newCardToken } from "./cardToken";
 import { cardMissing, toastMissing } from "./missingData";
 import { brandFromName, digitsOf, firstUsableCard, isCardComplete, isCvcComplete, type CardValues } from "./cardValidation";
 import { NEW_CARD } from "./SavedCardPicker";
@@ -36,21 +38,29 @@ export function usePaymentController() {
   const savedCards = customer?.cards ?? [];
   const [cardChoice, setCardChoice] = React.useState<string>(() => firstUsableCard(savedCards, NEW_CARD));
   const [savedCvc, setSavedCvc] = React.useState("");
+  // Al confirmar el código llegan sus tarjetas: se abre en la primera que no esté vencida.
+  const [cardsSeen, setCardsSeen] = React.useState(savedCards.length);
+  if (savedCards.length !== cardsSeen) {
+    setCardsSeen(savedCards.length);
+    if (cardsSeen === 0 && cardChoice === NEW_CARD) setCardChoice(firstUsableCard(savedCards, NEW_CARD));
+  }
   // Guardar la tarjeta es una decisión del cliente: empieza sin marcar.
   const [saveCard, setSaveCard] = React.useState(false);
+  // Reconocido sin código y con tarjetas guardadas: para usarlas, el código; o paga con otra sin él.
+  const [skipSavedCards, setSkipSavedCards] = React.useState(false);
   const chosenSaved = savedCards.find((item) => item.id === cardChoice) ?? null;
   // Anticipo: a quien la barbería se lo pide (nuevo o con inasistencias), pagar en la barbería cobra una parte ya.
   const depositPercent = customer?.depositRequired && shop.deposit ? shop.deposit.percent : null;
 
   // El recargo se dice en la opción que lo lleva, antes de elegirla, y pagar en la barbería lo evita.
   const fee = shop.cardFee ? t("booking.payment.feeHint", { fee: feeLabel(shop.cardFee, fmt.money) }) : "";
+  // En línea se paga con lo que deja la pasarela de la sucursal: tarjeta en todas, PSE y Nequi en las de Colombia.
+  const online = shop.payment.card ? (activeBranch(shop, state.branchId)?.onlineMethods ?? ["card", "wallet"]) : [];
   const methods: SelectionOption[] = [
-    ...(shop.payment.card
-      ? [
-          { value: "card", label: t("booking.payment.card"), description: [t("booking.payment.cardHint"), fee].filter(Boolean).join(" "), icon: CreditCard },
-          { value: "wallet", label: t("booking.payment.wallet"), description: [t("booking.payment.walletHint"), fee].filter(Boolean).join(" "), icon: Smartphone },
-        ]
-      : []),
+    ...(online.includes("card") ? [{ value: "card", label: t("booking.payment.card"), description: [t("booking.payment.cardHint"), fee].filter(Boolean).join(" "), icon: CreditCard }] : []),
+    ...(online.includes("wallet") ? [{ value: "wallet", label: t("booking.payment.wallet"), description: [t("booking.payment.walletHint"), fee].filter(Boolean).join(" "), icon: Smartphone }] : []),
+    ...(online.includes("pse") ? [{ value: "pse", label: t("booking.payment.pse"), description: t("booking.payment.pseHint"), icon: Building2 }] : []),
+    ...(online.includes("nequi") ? [{ value: "nequi", label: t("booking.payment.nequi"), description: t("booking.payment.nequiHint"), icon: Smartphone }] : []),
     // «Solo en línea» no esconde la opción: se ve apagada y dice por qué.
     ...(shop.payment.payAtShop
       ? [
@@ -69,7 +79,8 @@ export function usePaymentController() {
   const available = methods.filter((option) => !option.disabled);
   // Si la tarjeta de regalo cubre todo, no hay nada más que cobrar.
   const coveredByGift = totals.total === 0 && totals.gift > 0;
-  const method: PayMethod | null = coveredByGift ? "gift" : state.method && available.some((option) => option.value === state.method) ? state.method : ((available[0]?.value as PayMethod | undefined) ?? null);
+  // Ningún método viene marcado: lo elige el cliente.
+  const method: PayMethod | null = coveredByGift ? "gift" : state.method && available.some((option) => option.value === state.method) ? state.method : null;
   // La tarjeta elegida (guardada o la nueva ya escrita), dicha como en el recibo.
   const payCard = chosenSaved ? `${chosenSaved.brand} •••• ${chosenSaved.last4}` : card && digitsOf(card.number).length >= 4 ? `${t("booking.payment.card")} •••• ${digitsOf(card.number).slice(-4)}` : null;
   React.useEffect(() => {
@@ -82,14 +93,29 @@ export function usePaymentController() {
   const deposit = method === "shop" && depositPercent !== null ? depositOf(totals, depositPercent) : 0;
   /** Pide tarjeta: el pago con tarjeta o el anticipo de quien paga en la barbería. */
   const usesCard = method === "card" || deposit > 0;
+  /** Va a pagar con tarjeta, tiene guardadas y aún no confirmó el código: se le pide antes de mostrarlas. */
+  const needsCardCode = usesCard && !state.verified && Boolean(customer?.hasSavedCards) && !skipSavedCards;
+  // El código va en su ventana: se abre sola al elegir tarjeta y se cierra sola al confirmarlo.
+  const [codeAsked, setCodeAsked] = React.useState(false);
+  const [neededCode, setNeededCode] = React.useState(needsCardCode);
+  if (needsCardCode !== neededCode) {
+    setNeededCode(needsCardCode);
+    setCodeAsked(needsCardCode);
+  }
+  const codeOpen = codeAsked && needsCardCode;
+  const setCodeOpen = setCodeAsked;
 
   const serverCardError = isApiError(reserve.error) ? reserve.error.fieldErrors?.card?.[0] : undefined;
   const payLabel =
-    coveredByGift ? t("booking.gift.payCovered") : deposit > 0 ? t("booking.payment.payDeposit", { amount: fmt.money(deposit) }) : method === "shop" ? t("booking.payment.payShop") : method === "credit" ? t("booking.payment.payCredit") : method === "wallet" ? t("booking.payment.payWallet", { amount: fmt.money(totals.total) }) : t("booking.payment.payNow", { amount: fmt.money(totals.total) });
+    coveredByGift ? t("booking.gift.payCovered") : deposit > 0 ? t("booking.payment.payDeposit", { amount: fmt.money(deposit) }) : method === "shop" ? t("booking.payment.payShop") : method === "credit" ? t("booking.payment.payCredit") : method === "wallet" ? t("booking.payment.payWallet", { amount: fmt.money(totals.total) }) : method === "pse" ? t("booking.payment.payPse", { amount: fmt.money(totals.total) }) : method === "nequi" ? t("booking.payment.payNequi", { amount: fmt.money(totals.total) }) : t("booking.payment.payNow", { amount: fmt.money(totals.total) });
 
   /** Revisa que el cobro esté completo; avisa de lo que falta y dice si se puede seguir. */
   const validate = () => {
     if (!customer || !state.branchId || !method) return false;
+    if (needsCardCode) {
+      setCodeAsked(true);
+      return false;
+    }
     if (usesCard && !chosenSaved && !card) {
       toastMissing(t, [t("booking.payment.cardMissing")]);
       setSheet({ open: true, prefill: false });
@@ -103,8 +129,11 @@ export function usePaymentController() {
     return true;
   };
 
-  const submit = (tipId: string | null) => {
+  const submit = async (tipId: string | null) => {
     if (!customer || !state.branchId || !method) return;
+    // La tarjeta nueva va a la pasarela; al servidor solo llega su token. De una guardada, su id.
+    const token = await newCardToken(t, usesCard && !chosenSaved ? card : null, saveCard);
+    if (token === false) return;
     reserve.mutate(
       {
         branchId: state.branchId,
@@ -126,8 +155,7 @@ export function usePaymentController() {
         referencePhotos: state.referencePhotos.length > 0 ? [...state.referencePhotos] : undefined,
         utm: utm ?? undefined,
         method,
-        // El CVC no se manda: va a la pasarela. De una guardada solo viaja su id (el token).
-        card: usesCard && !chosenSaved && card ? { number: card.number, name: card.name, expiry: card.expiry, save: saveCard } : undefined,
+        card: token,
         savedCardId: usesCard && chosenSaved ? chosenSaved.id : undefined,
         notes: state.notes.trim() || undefined,
       },
@@ -143,20 +171,20 @@ export function usePaymentController() {
   const pay = ({ askTip = true }: { askTip?: boolean } = {}) => {
     if (!validate()) return;
     if (method === "shop") {
-      submit(null);
+      void submit(null);
       return;
     }
     if (askTip && shop.tipOptions.length > 0 && !coveredByGift) {
       setTipOpen(true);
       return;
     }
-    submit(state.tipId);
+    void submit(state.tipId);
   };
   /** Lo que se eligió en el modal de la propina (null = sin propina) y se cobra. */
   const confirmTip = (tipId: string | null) => {
     dispatch({ type: "setTip", tipId });
     setTipOpen(false);
-    submit(tipId);
+    void submit(tipId);
   };
 
   const chooseCard = (value: string) => {
@@ -183,6 +211,11 @@ export function usePaymentController() {
     deposit,
     depositPercent,
     usesCard,
+    needsCardCode,
+    codeOpen,
+    setCodeOpen,
+    skipSavedCards,
+    setSkipSavedCards,
     coveredByGift,
     payLabel,
     pay,

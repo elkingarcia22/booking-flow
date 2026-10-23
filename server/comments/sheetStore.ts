@@ -9,7 +9,8 @@ import type { GoogleClient } from "../feedback/google.js";
  * el servidor no tiene estado y cualquier instancia llega a la misma.
  */
 export const ACTIONS_TAB = "Acciones";
-export const COLUMNS = ["fecha", "accion", "hilo", "mensaje", "autor_id", "autor", "texto", "x", "y", "vista", "vista_nombre", "evento_id"] as const;
+// Las cuatro últimas (dónde se dejó el comentario) van al final: las filas viejas siguen leyéndose igual.
+export const COLUMNS = ["fecha", "accion", "hilo", "mensaje", "autor_id", "autor", "texto", "x", "y", "vista", "vista_nombre", "evento_id", "ruta", "modulo", "seccion", "elemento"] as const;
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const SHEETS = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -34,10 +35,14 @@ export const toRow = (event: CommentEvent): string[] => [
   event.context ?? "",
   event.contextLabel ?? "",
   event.id,
+  event.route ?? "",
+  event.module ?? "",
+  event.section ?? "",
+  event.element ?? "",
 ];
 
 export function fromRow(row: readonly string[]): CommentEvent | null {
-  const [at, action, threadId, messageId, authorId, authorName, body, x, y, context, contextLabel, id] = row;
+  const [at, action, threadId, messageId, authorId, authorName, body, x, y, context, contextLabel, id, route, module, section, element] = row;
   if (!at || !threadId || !authorId || !id) return null;
   if (!["create", "reply", "resolve", "reopen", "delete"].includes(action ?? "")) return null;
   const number = (value: string | undefined) => (value === undefined || value === "" || Number.isNaN(Number(value)) ? undefined : Number(value));
@@ -54,6 +59,10 @@ export function fromRow(row: readonly string[]): CommentEvent | null {
     y: number(y),
     context: context || undefined,
     contextLabel: contextLabel || undefined,
+    route: route || undefined,
+    module: module || undefined,
+    section: section || undefined,
+    element: element || undefined,
   };
 }
 
@@ -113,6 +122,14 @@ async function createSheet(client: GoogleClient, shareWith: readonly string[]): 
   return file.id;
 }
 
+/**
+ * Deja la cabecera con todas las columnas. Una hoja de antes tiene solo las primeras: las nuevas
+ * (dónde se dejó el comentario) quedarían sin título. Reescribir la fila 1 no toca los datos.
+ */
+async function ensureHeader(client: GoogleClient, spreadsheetId: string): Promise<void> {
+  await client.json(`${SHEETS}/${spreadsheetId}/values/${encodeURIComponent(`${ACTIONS_TAB}!A1`)}?valueInputOption=RAW`, { method: "PUT", body: { values: [[...COLUMNS]] } });
+}
+
 /** Abre la hoja a cualquiera con el enlace. Repetirlo no cambia nada, así que vale también para una hoja que ya existía. */
 async function openToLink(client: GoogleClient, spreadsheetId: string, role: "reader" | "writer"): Promise<void> {
   await client.json(`${DRIVE}/files/${spreadsheetId}/permissions?sendNotificationEmail=false`, { body: { type: "anyone", role } });
@@ -125,6 +142,7 @@ export function createSheetStore(client: GoogleClient, options: { sheetId?: stri
     let id = options.sheetId ?? null;
     if (id) await ensureActionsTab(client, id);
     else id = (await findSheet(client)) ?? (await createSheet(client, options.shareWith ?? []));
+    await ensureHeader(client, id);
     // Si Google no deja (algunas organizaciones bloquean los enlaces públicos), la hoja sigue sirviendo: solo no queda abierta.
     if (options.linkAccess) await openToLink(client, id, options.linkAccess).catch((error) => console.error("[comments] no se pudo abrir la hoja al enlace", error));
     sheetId = id;

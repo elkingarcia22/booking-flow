@@ -2,7 +2,6 @@ import * as React from "react";
 import { useAppT } from "@/app/i18n";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon, type IconName } from "@/icons";
 import { cn } from "@/lib/utils";
@@ -245,18 +244,6 @@ function InlinePanel({ title, description, heading, footer, onClose, onShown, ch
       <div className="max-h-[26rem] overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">{children}</div>
       {footer && <footer className="flex flex-col gap-2 border-t border-border bg-muted/30 px-4 py-3">{footer}</footer>}
     </section>
-  );
-}
-
-/** El buscador de arriba de una lista larga; se queda pegado al desplazar. */
-export function PickerSearch({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
-  return (
-    <div className="sticky top-0 z-10 bg-popover px-4 pb-2 pt-3">
-      <div className="relative">
-        <ThemaIcon name="search" size="sm" tone="muted" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
-        <Input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={placeholder} className="pl-9" />
-      </div>
-    </div>
   );
 }
 

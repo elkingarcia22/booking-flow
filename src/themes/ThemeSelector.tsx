@@ -11,6 +11,8 @@ import { useTheme } from "./themeContext";
 import type { DensityScale, RadiusScale, ThemeMode } from "./buildTokens";
 import type { FontOption, HeadingFontId } from "./fonts";
 import type { ThemePreset } from "./presets";
+import { CUSTOM_THEME_ID } from "./customTheme";
+import { CustomThemeEditor, type DefaultLogo } from "./CustomThemeEditor";
 
 const MODES: readonly { id: ThemeMode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "light", label: "Claro", icon: Sun },
@@ -121,19 +123,29 @@ export function ThemeSelectorPanel({
    * apaga; el selector completo (`ThemeSelector`) las deja encendidas.
    */
   advanced = true,
+  logoSrc,
+  defaultLogo,
 }: {
   advanced?: boolean;
+  /** El logo de la barbería: en «Personalizado» se le leen los colores para proponerlos. */
+  logoSrc?: string | null;
+  /** El logo que se ve sin uno propio (colores e IA); «Personalizado» lo propone. */
+  defaultLogo?: DefaultLogo;
 }) {
-  const { preset, presets, setPreset, mode, setMode, radius, setRadius, density, setDensity, font, setFont, headingFont, setHeadingFont, fonts } = useTheme();
+  const { preset, presets, setPreset, customColors, mode, setMode, radius, setRadius, density, setDensity, font, setFont, headingFont, setHeadingFont, fonts } = useTheme();
+
+  const isCustom = preset.id === CUSTOM_THEME_ID;
 
   return (
     <>
-      <fieldset className="space-y-2">
+      {/* `min-w-0`: un fieldset no encoge por debajo de su contenido y, con el editor
+          de «Personalizado» abierto, desbordaba el panel. */}
+      <fieldset className="min-w-0 space-y-2">
         <div className="flex items-baseline justify-between gap-2">
           <legend className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">Color</legend>
           <span className="truncate text-[11px] font-medium text-text-secondary">{preset.name}</span>
         </div>
-        {/* Solo la pastilla, sin el nombre de cada una: con 14 presets, la
+        {/* Solo la pastilla, sin el nombre de cada una: con una docena de presets, la
             versión con nombre ocupaba siete filas. El nombre se lee en el
             tooltip y, del activo, en la etiqueta de arriba. */}
         <div role="radiogroup" aria-label="Color" className="flex flex-wrap gap-2">
@@ -167,7 +179,38 @@ export function ThemeSelectorPanel({
               </Tooltip>
             );
           })}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isCustom}
+                aria-label="Personalizado"
+                data-testid="theme-custom"
+                onClick={() => setPreset(CUSTOM_THEME_ID)}
+                className={cn(
+                  "relative flex size-7 shrink-0 items-center justify-center rounded-full p-0.5 ring-2 ring-transparent transition-all",
+                  "hover:scale-110 focus-visible:outline-none focus-visible:ring-primary/60",
+                  isCustom ? "ring-primary" : "hover:ring-border-strong/60"
+                )}
+              >
+                <span
+                  aria-hidden
+                  className="block size-full rounded-full ring-1 ring-black/10 dark:ring-white/15"
+                  style={{ background: `linear-gradient(135deg, ${customColors.primary} 50%, ${customColors.secondary} 50%)` }}
+                />
+                {/* El arcoíris dice «elige el tuyo», como el premium dice «acabado». */}
+                <span
+                  aria-hidden
+                  className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-surface"
+                  style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Tus colores: elige primario y secundario, o tómalos de tu logo.</TooltipContent>
+          </Tooltip>
         </div>
+        {isCustom && <CustomThemeEditor logoSrc={logoSrc} defaultLogo={defaultLogo} />}
       </fieldset>
 
       <SegmentedGroup

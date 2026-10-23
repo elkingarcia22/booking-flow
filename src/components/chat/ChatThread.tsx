@@ -33,7 +33,7 @@ export interface ChatThreadProps {
  */
 export function ChatThread({ conversation, onMore, className }: ChatThreadProps) {
   const t = useT();
-  const { lang, onNavigate } = useChatContext();
+  const { lang, onNavigate, onAction } = useChatContext();
   const actions = useChatActions();
   const endRef = React.useRef<HTMLDivElement>(null);
   const messages = conversation.messages;
@@ -80,12 +80,14 @@ export function ChatThread({ conversation, onMore, className }: ChatThreadProps)
             onStop={(shown) => actions.stop(message.id, shown)}
             onFinish={() => actions.finish(message.id)}
             onProgress={() => scrollToEnd("auto")}
-            onFeedback={(value) => actions.feedback(message.id, value)}
+            onFeedback={(value, detail) => actions.feedback(message.id, value, detail)}
             onRegenerate={index === messages.length - 1 ? actions.regenerate : undefined}
             onFollowup={actions.send}
             onAnswer={(option) => actions.answer(message.id, option)}
             onNavigate={onNavigate}
             onMore={onMore ? (action) => onMore(message.id, action) : undefined}
+            onAction={onAction ? (action, op) => void actions.runAction(message.id, action, op) : undefined}
+            onDiscardAction={(actionId) => actions.discardAction(message.id, actionId)}
           />
         )
       )}

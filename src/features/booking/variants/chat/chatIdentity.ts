@@ -6,10 +6,13 @@ import type { BookingShop, PhoneCheck } from "../../types";
 import { capitalize, EMAIL, type Expecting, type MessageInput } from "./chatKit";
 import { makeQuestion, type BookingQuestion } from "./chatQuestions";
 import { codeFromText, phoneFromText } from "./parseBookingText";
+import { consentPack } from "@/features/legal/consent";
 
 export interface IdentityKit {
   t: ReturnType<typeof useAppT>;
   shop: BookingShop;
+  /** El idioma de la reserva: decide el idioma del texto del permiso. */
+  locale: string;
   apply: (action: BookingAction) => void;
   say: (...messages: MessageInput[]) => void;
   ask: (question: BookingQuestion, text?: string) => void;
@@ -20,8 +23,10 @@ export interface IdentityKit {
   /** El perfil del cliente nuevo mientras lo escribe (nombre, apellido, correo). */
   profile: { current: { firstName: string; lastName: string; email: string } };
   askPhone: (text?: string) => void;
-  /** Si el celular que escribe ya tiene que confirmarse con código (va a pagar o a «Mis citas»). */
+  /** Si el celular que escribe ya tiene que confirmarse con código (va a «Mis citas»). */
   needsCode: () => boolean;
+  /** Si, siendo nuevo, ya hace falta su ficha (va a pagar o a la lista de espera). */
+  needsProfile: () => boolean;
   /** El celular (de un cliente nuevo) quedó anotado sin código: se sigue armando la cita. */
   onPhoneSaved: () => void;
 }
@@ -33,7 +38,10 @@ export interface IdentityKit {
  * Todo se escribe en la caja; el código no se repite en el hilo.
  */
 export function useChatIdentity(kit: IdentityKit) {
-  const { t, shop, apply, say, ask, busy, expect, expecting, stateRef, profile, askPhone, needsCode, onPhoneSaved } = kit;
+  const { t, shop, apply, say, ask, busy, expect, expecting, stateRef, profile, askPhone, needsCode, needsProfile, onPhoneSaved, locale } = kit;
+  // El texto del permiso es el del país de la sede por la que entra (o la primera).
+  const consentBranchId = () => stateRef.current.branchId ?? shop.branches[0]?.id ?? null;
+  const consent = () => consentPack(shop.branches.find((branch) => branch.id === consentBranchId())?.country, locale === "en" ? "en" : "es", shop.name);
 
   /** Manda el código al celular y queda esperándolo. */
   const sendCode = async (phone: string) => {
@@ -50,10 +58,21 @@ export function useChatIdentity(kit: IdentityKit) {
     }
   };
 
+  /** La ficha del nuevo, dato por dato en la caja (sin código). */
+  const askProfile = () => {
+    expect("firstName");
+    say({ text: t("booking.chat.newHello", { shop: shop.name }) });
+  };
+
   const submitPhone = async (text: string) => {
     // Con palabras alrededor («mi número es 320 217 27 38»), guiones o espacios: solo cuentan las cifras.
     const phone = phoneFromText(text);
     if (!phone) return say({ text: t("booking.chat.badPhone") });
+    return lookupPhone(phone);
+  };
+
+  /** Quién es por su celular, sin código (salvo para «Mis citas» o el número bloqueado). */
+  const lookupPhone = async (phone: string) => {
     if (needsCode()) return sendCode(phone);
     // Si ya es cliente se le reconoce sin código (el saludo con lo de siempre); el nuevo sigue sin código.
     let check: PhoneCheck;
@@ -67,8 +86,10 @@ export function useChatIdentity(kit: IdentityKit) {
       return apply({ type: "customerPreview", phone, customer: check.customer, token: check.token });
     }
     // Cliente sin perfil que mostrar (bloqueado): lo sabe tras el código.
-    if (check.returning) return sendCode(phone);
-    apply({ type: "phoneEntered", phone });
+    if (check.returning || !check.token) return sendCode(phone);
+    // El nuevo, con la sesión sin código que le deja crear su ficha.
+    apply({ type: "identified", phone, customer: null, token: check.token });
+    if (needsProfile()) return askProfile();
     expect(null);
     say({ text: t("booking.chat.phoneSaved") });
     onPhoneSaved();
@@ -114,7 +135,7 @@ export function useChatIdentity(kit: IdentityKit) {
       if (!EMAIL.test(value)) return say({ text: t("booking.chat.badEmail") });
       profile.current = { ...profile.current, email: value };
       expect(null);
-      return ask(makeQuestion("consent", t("booking.chat.consentTitle", { shop: shop.name }), [{ label: t("booking.chat.consentYes"), value: "yes" }, { label: t("booking.chat.consentNo"), value: "no" }], { hint: t("booking.chat.consentHint") }));
+      return ask(makeQuestion("consent", t("booking.chat.consentTitle", { shop: shop.name }), [{ label: t("booking.chat.consentYes"), value: "yes" }, { label: t("booking.chat.consentNo"), value: "no" }], { hint: `${consent().marketingDisclosure} ${consent().privacyShort}` }));
     }
     expect("email");
     say({ text: t("booking.chat.askEmail", { name: profile.current.firstName }) });
@@ -124,7 +145,7 @@ export function useChatIdentity(kit: IdentityKit) {
     const token = stateRef.current.token;
     if (!token) return askPhone();
     try {
-      const customer = await busy(() => bookingApi.createCustomer(token, { ...profile.current, marketing }));
+      const customer = await busy(() => bookingApi.createCustomer(token, { ...profile.current, marketing, branchId: consentBranchId() }));
       apply({ type: "customerUpdated", customer });
     } catch (error) {
       expect("email");
@@ -132,5 +153,5 @@ export function useChatIdentity(kit: IdentityKit) {
     }
   };
 
-  return { submitPhone, sendCode, submitCode, submitProfileText, createProfile };
+  return { submitPhone, lookupPhone, askProfile, sendCode, submitCode, submitProfileText, createProfile };
 }

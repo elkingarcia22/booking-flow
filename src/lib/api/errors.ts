@@ -12,6 +12,8 @@ export type ApiErrorCode =
   | "conflict"
   | "validation"
   | "rate_limited"
+  /** Lo sensible pide confirmar la identidad con un código nuevo (`X-Step-Up`). */
+  | "step_up_required"
   | "server"
   | "invalid_response"
   | "unknown";
@@ -71,6 +73,7 @@ const MESSAGES: Record<ApiErrorCode, { title: string; description: string }> = {
   conflict: { title: "Conflicto", description: "Alguien más cambió este dato. Recarga y vuelve a intentarlo." },
   validation: { title: "Datos inválidos", description: "Revisa los campos marcados." },
   rate_limited: { title: "Demasiadas solicitudes", description: "Espera unos segundos antes de volver a intentarlo." },
+  step_up_required: { title: "Confirma que eres tú", description: "Para esto hace falta el código que te enviamos al celular." },
   server: { title: "Error del servidor", description: "Algo falló de nuestro lado. Ya estamos avisados." },
   invalid_response: { title: "Respuesta inesperada", description: "El servidor devolvió datos con una forma que no reconocemos." },
   unknown: { title: "Algo salió mal", description: "Inténtalo de nuevo; si persiste, contáctanos." },

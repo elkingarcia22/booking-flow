@@ -2,7 +2,7 @@ import * as React from "react";
 import { MessagesSquare, Split, Monitor, PanelRightOpen, Smartphone, Tablet } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { useAppT } from "@/app/i18n";
+import { APP_MESSAGES, useAppT } from "@/app/i18n";
 import { Grain } from "@/components/atmosphere";
 import { CommentLayer, CommentsPanel, CommentsProvider, CommentsToggle, type CommentThread } from "@/components/comments";
 import { SegmentedControl } from "@/components/selection";
@@ -10,7 +10,11 @@ import { Text } from "@/components/typography";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ThemaIcon } from "@/icons";
-import { ThemeModeToggle } from "@/themes/ThemeSelector";
+import { LocaleProvider } from "@/i18n";
+import { useTheme } from "@/themes";
+import { useBookingAppearance } from "./useBookingAppearance";
+import { locateCommentPoint } from "@/lib/comments/locate";
+import { isBookingThread } from "@/lib/comments/scope";
 import { BookingFlow } from "./BookingFlow";
 import { ReviewerNameDialog } from "./comments/ReviewerNameDialog";
 import { useReviewer, useSharedComments } from "./comments/useSharedComments";
@@ -66,13 +70,21 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   const [isWidgetOpen, setIsWidgetOpen] = React.useState(true);
   // Los comentarios de revisión sobre la vista previa: compartidos y guardados en la hoja de Google.
   const { author: reviewer, isAsking, askName, saveName } = useReviewer();
-  const { threads: commentThreads, onThreadsChange: onCommentsChange } = useSharedComments(reviewer);
+  // La hoja es compartida con la plataforma: aquí solo los de la reserva.
+  const { threads: commentThreads, onThreadsChange: onCommentsChange } = useSharedComments(reviewer, { include: isBookingThread });
+  // La reserva se ve como la configuró la barbería, no como tiene personalizada la app quien la mira.
+  const { resolvedMode } = useTheme();
+  // En la vista previa se puede mirar en el otro modo sin cambiar lo configurado.
+  const [previewMode, setPreviewMode] = React.useState<"light" | "dark" | null>(null);
+  const locale = useBookingAppearance(isEmbed ? undefined : (previewMode ?? undefined));
 
   if (isEmbed) {
     return (
       <main className="h-dvh">
         {/* La página pública cuenta para el embudo; `widget=1` la marca como abierta desde el sitio. */}
-        <BookingFlow version={version} onVersionChange={(next) => setParams((current) => ({ ...Object.fromEntries(current), version: next }), { replace: true })} isPhone={isNarrow} layout={isNarrow ? "compact" : "wide"} touch={isNarrow ? "default" : "lg"} surface={params.get("widget") === "1" ? "widget" : "link"} />
+        <LocaleProvider forcedLocale={locale} messages={APP_MESSAGES}>
+          <BookingFlow version={version} onVersionChange={(next) => setParams((current) => ({ ...Object.fromEntries(current), version: next }), { replace: true })} isPhone={isNarrow} layout={isNarrow ? "compact" : "wide"} touch={isNarrow ? "default" : "lg"} surface={params.get("widget") === "1" ? "widget" : "link"} />
+        </LocaleProvider>
       </main>
     );
   }
@@ -97,22 +109,24 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
   };
   const isWidget = !isNarrow && mode === "widget";
   const flow = (
-    <BookingFlow
-      key={version}
-      version={version}
-      onVersionChange={(next) => setParam("version", next)}
-      isPhone={isNarrow || mode === "phone"}
-      layout={!isNarrow && mode === "monitor" ? "wide" : "compact"}
-      touch={!isNarrow && mode === "tablet" ? "lg" : "default"}
-      onFinish={isWidget ? () => setIsWidgetOpen(false) : undefined}
-      headerTrailing={
-        isWidget ? (
-          <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsWidgetOpen(false)} aria-label={t("booking.site.close")}>
-            <ThemaIcon name="close" />
-          </Button>
-        ) : undefined
-      }
-    />
+    <LocaleProvider forcedLocale={locale} messages={APP_MESSAGES}>
+      <BookingFlow
+        key={version}
+        version={version}
+        onVersionChange={(next) => setParam("version", next)}
+        isPhone={isNarrow || mode === "phone"}
+        layout={!isNarrow && mode === "monitor" ? "wide" : "compact"}
+        touch={!isNarrow && mode === "tablet" ? "lg" : "default"}
+        onFinish={isWidget ? () => setIsWidgetOpen(false) : undefined}
+        headerTrailing={
+          isWidget ? (
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsWidgetOpen(false)} aria-label={t("booking.site.close")}>
+              <ThemaIcon name="close" />
+            </Button>
+          ) : undefined
+        }
+      />
+    </LocaleProvider>
   );
 
 
@@ -157,7 +171,16 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
           </div>
           <div className="ml-auto flex items-center gap-2">
             <DemoHints />
-            <ThemeModeToggle />
+            {/* Mirar la reserva en el otro modo; lo configurado no cambia (eso es de Configuración). */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={resolvedMode === "dark" ? t("booking.preview.viewLight") : t("booking.preview.viewDark")}
+              onClick={() => setPreviewMode(resolvedMode === "dark" ? "light" : "dark")}
+            >
+              <ThemaIcon name={resolvedMode === "dark" ? "sun" : "moon"} />
+            </Button>
             <CommentsToggle />
             <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
               <ThemaIcon name="link" />
@@ -172,7 +195,11 @@ export function BookingPage({ standalone = false }: { /** La reserva sola (el re
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <CommentLayer className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <CommentLayer
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+            // En la hoja: módulo «Agendamiento online», la versión y el dispositivo, y la sección y el elemento bajo el clic.
+            locate={(point) => locateCommentPoint(point, { module: t("booking.preview.title"), sectionPrefix: commentContextLabel })}
+          >
             <main className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
               <Grain scope="container" />
               {/* Los controles de la vista previa, centrados bajo la cabecera: la experiencia y, si hay marcos, el dispositivo. */}

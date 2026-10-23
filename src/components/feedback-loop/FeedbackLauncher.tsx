@@ -44,7 +44,7 @@ export function FeedbackLauncher({
       data-slot="feedback-launcher"
       className={cn(
         "group fixed bottom-24 right-4 z-rail flex h-12 items-center justify-center gap-2 rounded-full bg-primary font-semibold text-primary-foreground shadow-rail outline-none md:bottom-6 md:right-6",
-        "transition-transform duration-fast ease-out-expo hover:-translate-y-0.5 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+        "transition-transform duration-fast ease-out-expo active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none",
         collapsed ? "w-12" : "px-5",
         className
       )}

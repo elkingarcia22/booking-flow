@@ -7,12 +7,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Text } from "@/components/typography";
 import { useT } from "@/i18n";
-import { speak, type ChatMessage } from "@/lib/chat";
+import { speak, type ChatAction, type ChatMessage } from "@/lib/chat";
 import { ChatMark } from "./ChatMark";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ChatThinking } from "./ChatThinking";
 import { ChatQuestionCard } from "./ChatQuestionCard";
 import { ChatCardView } from "./ChatCardView";
+import { ChatActionCard } from "./ChatActionCard";
 import { ChatFeedbackForm, type ChatFeedbackPayload } from "./ChatFeedbackForm";
 import { useStreamedText } from "./useStreamedText";
 import "./chat.css";
@@ -32,6 +33,9 @@ export interface ChatAgentMessageProps {
   onNavigate?: (href: string) => void;
   /** «Más»: compartir, crear tarea, reportar. Sin esto no hay menú. */
   onMore?: (action: "share" | "task" | "report") => void;
+  /** Aplicar o deshacer un cambio propuesto; sin esto las propuestas no tienen botón. */
+  onAction?: (action: ChatAction, op: "apply" | "undo") => void;
+  onDiscardAction?: (actionId: string) => void;
 }
 
 function ActionButton({ label, name, active, onClick }: { label: string; name: React.ComponentProps<typeof ThemaIcon>["name"]; active?: boolean; onClick: () => void }) {
@@ -58,7 +62,7 @@ function ActionButton({ label, name, active, onClick }: { label: string; name: R
  * y las acciones: copiar, útil o no, regenerar, leer en voz alta. Las
  * sugerencias para seguir salen solo en la última.
  */
-export function ChatAgentMessage({ message, isLast, lang, onStop, onFinish, onProgress, onFeedback, onRegenerate, onFollowup, onAnswer, onNavigate, onMore }: ChatAgentMessageProps) {
+export function ChatAgentMessage({ message, isLast, lang, onStop, onFinish, onProgress, onFeedback, onRegenerate, onFollowup, onAnswer, onNavigate, onMore, onAction, onDiscardAction }: ChatAgentMessageProps) {
   const t = useT();
   const streaming = message.status === "streaming";
   const { shown, done } = useStreamedText(message.text, streaming, { onDone: onFinish, onProgress });
@@ -147,6 +151,18 @@ export function ChatAgentMessage({ message, isLast, lang, onStop, onFinish, onPr
         )}
 
         {settled && message.card && <ChatCardView card={message.card} />}
+
+        {settled &&
+          message.actions?.map((action) => (
+            <ChatActionCard
+              key={action.id}
+              action={action}
+              onApply={onAction ? () => onAction(action, "apply") : undefined}
+              onUndo={onAction ? () => onAction(action, "undo") : undefined}
+              onDiscard={onDiscardAction ? () => onDiscardAction(action.id) : undefined}
+              onNavigate={onNavigate}
+            />
+          ))}
 
         {settled && message.question && <ChatQuestionCard question={message.question} active={isLast} onAnswer={onAnswer} />}
 

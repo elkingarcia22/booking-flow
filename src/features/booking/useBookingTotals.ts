@@ -1,7 +1,8 @@
 import * as React from "react";
+import { blendedPercent, linePercent } from "@/features/branches/tax";
 import { chargesCardFee, computeTotals, coverByPackages, promoDiscount, tipAmount, type Totals } from "./pricing";
 import type { BookingState, DraftItem } from "./bookingState";
-import type { BookingCatalog, BookingService, BookingShop } from "./types";
+import type { BookingBranch, BookingCatalog, BookingService, BookingShop } from "./types";
 
 type PricedItem = Pick<DraftItem, "serviceIds" | "barberId" | "assignedBarberId">;
 
@@ -60,6 +61,21 @@ function rewardAmount(state: BookingState, catalog: BookingCatalog | undefined):
   return loyalty.rewardValue;
 }
 
+/** La sucursal elegida en la reserva: de ella salen la moneda, el impuesto y los métodos de pago. */
+export const activeBranch = (shop: BookingShop | undefined, branchId: string | null): BookingBranch | undefined => shop?.branches?.find((branch) => branch.id === branchId);
+
+/** La tasa media del carrito: cada servicio y producto con la suya o, si no tiene, la de la sucursal. */
+function cartPercent(state: BookingState, catalog: BookingCatalog | undefined, branchPercent: number): number {
+  const rateOf = (rate: number | null | undefined) => linePercent(rate, branchPercent);
+  return blendedPercent([
+    ...state.items.flatMap((item) => servicePrices(item, catalog).map((line) => ({ amount: line.price, percent: rateOf(catalog?.services.find((service) => service.id === line.serviceId)?.taxPercent) }))),
+    ...Object.entries(state.products).map(([id, qty]) => {
+      const product = catalog?.products.find((item) => item.id === id);
+      return { amount: (product?.price ?? 0) * qty, percent: rateOf(product?.taxPercent) };
+    }),
+  ]);
+}
+
 export function useBookingTotals(state: BookingState, catalog: BookingCatalog | undefined, shop: BookingShop | undefined): Totals {
   return React.useMemo(() => {
     const services = state.items.reduce((sum, item) => sum + itemPrice(item, catalog), 0);
@@ -76,14 +92,15 @@ export function useBookingTotals(state: BookingState, catalog: BookingCatalog | 
       services,
       products,
       discount: atPayment ? promoDiscount(state.promo, services + products) : 0,
-      taxPercent: shop?.taxPercent ?? 0,
+      taxPercent: cartPercent(state, catalog, activeBranch(shop, state.branchId)?.taxPercent ?? 0),
+      taxInclusive: shop?.taxInclusive === true,
       tip: tipAmount(tip, services),
       cardFee: method && chargesCardFee(method) ? (shop?.cardFee ?? null) : null,
       giftBalance: state.gift?.balance ?? 0,
       prepaid: packageCoverage(state, catalog),
       reward: atPayment ? rewardAmount(state, catalog) : 0,
     });
-  }, [catalog, shop, state.items, state.products, state.promo, state.tipId, state.method, state.gift, state.useReward, state.usePackages, state.customer, state.step]);
+  }, [catalog, shop, state.branchId, state.items, state.products, state.promo, state.tipId, state.method, state.gift, state.useReward, state.usePackages, state.customer, state.step]);
 }
 
 export interface DraftOrderLine {

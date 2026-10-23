@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { APP_MESSAGES } from "@/app/i18n";
 import { ThemaToaster } from "@/components/feedback";
+import { TruncationTooltip } from "@/components/overlays";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BookingPage } from "@/features/booking/BookingPage";
 import { LocaleProvider } from "@/i18n";
@@ -27,6 +28,7 @@ export function BookingApp() {
           <TooltipProvider delayDuration={200}>
             <RouterProvider router={router} />
             <ThemaToaster />
+            <TruncationTooltip />
           </TooltipProvider>
         </ThemeProvider>
       </LocaleProvider>

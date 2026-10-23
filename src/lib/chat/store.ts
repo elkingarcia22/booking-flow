@@ -1,4 +1,4 @@
-import type { ChatBackend, ChatMessage, ChatReply, ChatState, Conversation } from "./types";
+import type { ChatAction, ChatBackend, ChatMessage, ChatReply, ChatState, Conversation } from "./types";
 
 /**
  * Las conversaciones, en un solo sitio.
@@ -131,7 +131,9 @@ export function createChatStore(options: ChatStoreOptions = {}) {
           question: reply.question,
           card: reply.card,
           link: reply.link,
+          actions: reply.actions,
           via: reply.via,
+          traceId: reply.traceId,
         }));
         // Si no se está mirando esta conversación, la respuesta queda sin leer.
         patchConversation(conversationId, (conversation) => ({ ...conversation, updatedAt: now(), unread: state.activeId !== conversationId }));
@@ -236,6 +238,13 @@ export function createChatStore(options: ChatStoreOptions = {}) {
         messages: [...item.messages.slice(0, index), { ...item.messages[index], text: text.trim() }],
       }));
       appendAgentPlaceholder(conversation.id, text.trim(), backend);
+    },
+
+    /** Cambia el estado de un cambio propuesto (aplicado, descartado, deshecho…). */
+    updateAction(messageId: string, actionId: string, patch: Partial<ChatAction>) {
+      const conversation = state.conversations.find((item) => item.messages.some((message) => message.id === messageId));
+      if (!conversation) return;
+      patchMessage(conversation.id, messageId, (message) => ({ ...message, actions: message.actions?.map((action) => (action.id === actionId ? { ...action, ...patch } : action)) }));
     },
 
     feedback(messageId: string, value: "up" | "down" | undefined) {

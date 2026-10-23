@@ -13,6 +13,7 @@ import { dayKeyOf, firstBookableDay, parseStart } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { AgendaCover, AgendaCoverTitle } from "../../flow/AgendaCover";
 import { AlternativeBarbers } from "../../flow/AlternativeBarbers";
+import { WindowAlternatives } from "../../flow/WindowAlternatives";
 import { NextToPart } from "../../flow/NextToPart";
 import { CallCard, ScheduleHeading } from "../../flow/ScheduleParts";
 import { SeparateServicesSwitch } from "../../flow/SeparateServicesSwitch";
@@ -224,6 +225,8 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
                 />
               )}
               <TimeWindows className={cn(timeMissing && "rounded-2xl outline outline-1 outline-offset-4 outline-destructive")} groups={windows} timeLabel={timeLabel} withName={chosenBarber?.name.split(" ")[0]} selectedTime={selectedTime} onPick={(time, freeIds) => pick(time, chosenBarber?.id ?? null, freeIds)} />
+              {/* Le faltan franjas al barbero elegido: en esas, otros que sí tienen horas. */}
+              <WindowAlternatives day={day} barberWindows={windows.map((group) => group.window)} isBlocked={(time) => isBlocked(parseStart(`${dayKey}T${time}`))} />
               {hidesBusy && (
                 <Text size="xs" tone="muted" className="flex items-start gap-2">
                   <ThemaIcon name="info" size="sm" />
@@ -238,7 +241,7 @@ export function AgendaBoard({ onNeedSignIn, timeMissing = false, heldCount = 0 }
           {!isWaiting && !hasSlots && <AlternativeBarbers day={day} onDayChange={setDay} />}
 
           {!isWaiting &&
-            (state.customer && state.verified ? (
+            (state.customer ? (
               <WaitlistCard
                 key={`${dayKey}|${draft?.barberId ?? "any"}`}
                 day={day}

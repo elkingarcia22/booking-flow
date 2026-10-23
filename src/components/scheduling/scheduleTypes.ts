@@ -39,6 +39,13 @@ export interface ScheduleResource {
   progress?: number;
   /** Algo que la columna pide mirar ahora: se pinta como chip bajo el nombre. */
   alert?: ScheduleResourceAlert;
+  /**
+   * El día que enseña la columna cuando no es el de la rejilla: la semana de una
+   * sola persona, una columna por día. La cabecera pasa a ser el día (semana y
+   * número, hoy resaltado) en vez del avatar, y las citas, los huecos y la línea
+   * de «ahora» son los de ese día.
+   */
+  date?: Date;
 }
 
 export type ScheduleEventKind = "appointment" | "block";
@@ -50,7 +57,7 @@ export interface ScheduleEventAction {
 }
 
 /** Los iconos pequeños de la esquina de una tarjeta. Son conceptos, no iconos: la tarjeta decide cuál dibuja. */
-export type ScheduleMarkerIcon = "online" | "walkIn" | "new" | "note" | "paid" | "repeat" | "requested";
+export type ScheduleMarkerIcon = "online" | "walkIn" | "new" | "note" | "paid" | "repeat" | "requested" | "confirmed" | "risk" | "reschedule" | "declined";
 
 export interface ScheduleMarker {
   id: string;
@@ -115,6 +122,13 @@ export interface ScheduleEvent {
    * se arrastra y tocarla es aceptar la propuesta.
    */
   ghost?: boolean;
+  /**
+   * Con `ghost`: es la que se está armando ahora mismo (el hueco elegido en
+   * «Crear cita», la ausencia o el bloqueo que se agrega). Se dibuja opaca
+   * —tapa lo de debajo para que los textos no se encimen—, con el borde
+   * discontinuo más grueso y un halo, para que se vea dónde va a quedar.
+   */
+  active?: boolean;
   /** Por qué se propone («Sin dejar hueco entre citas»): una línea bajo el título. */
   note?: string;
   /**

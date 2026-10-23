@@ -6,6 +6,8 @@
  * «¿puedo escuchar?» y, si no, muestre lo mismo con una transcripción escrita.
  */
 
+import { serverFetch } from "@/lib/api/serverSession";
+
 interface SpeechRecognitionResultLike {
   isFinal: boolean;
   0: { transcript: string };
@@ -183,16 +185,22 @@ let naturalVoiceUnavailable = false;
 async function naturalVoice(text: string, lang: string, signal: AbortSignal): Promise<Blob | null> {
   if (naturalVoiceUnavailable || typeof fetch === "undefined") return null;
   try {
-    const response = await fetch(TTS_ENDPOINT, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, lang: lang.toLowerCase().startsWith("en") ? "en" : "es" }),
-      signal,
-    });
+    const response = await serverFetch(
+      TTS_ENDPOINT,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, lang: lang.toLowerCase().startsWith("en") ? "en" : "es" }),
+        signal,
+      },
+      // La reserva en línea no tiene sesión del equipo: pide una de invitado, que solo vale para la voz.
+      { guest: true }
+    );
     const type = response.headers.get("content-type") ?? "";
     if (response.ok && type.startsWith("audio/")) return await response.blob();
-    // Sin servicio (501) o sin funciones (en local responde la app): la voz del navegador desde ya.
-    if (response.status === 501 || !type.startsWith("audio/")) naturalVoiceUnavailable = true;
+    // Sin servicio (501) o sin funciones (404, o responde la app): la voz del navegador desde ya. Sin
+    // sesión (401) o sin cupo (429) solo esta vez: puede llegar la sesión o liberarse el cupo.
+    if (response.status === 501 || response.status === 404 || (response.ok && !type.startsWith("audio/"))) naturalVoiceUnavailable = true;
     return null;
   } catch {
     return null;

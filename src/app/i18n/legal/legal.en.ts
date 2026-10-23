@@ -1,0 +1,26 @@
+import type { legalEs } from "./legal.es";
+
+export const legalEn: Record<keyof typeof legalEs, string> = {
+  "legal.title": "Legal",
+  "legal.lead": "Barberlytics' terms, data policies and processing agreement. Each with its version and date.",
+  "legal.documents": "Documents",
+  "legal.contents": "Contents",
+  "legal.version": "Version {version}",
+  "legal.updated": "Updated {date}",
+  "legal.spanishOnly": "This policy is published in Spanish, as required in Colombia.",
+  "legal.dpa.title": "Data processing agreement",
+  "legal.dpa.hint": "Barberlytics processes your clients' and staff's data on your shop's behalf. This agreement says how: only on your instructions, securely and with the listed providers.",
+  "legal.dpa.accepted": "Accepted by {name} on {date} (version {version})",
+  "legal.dpa.outdated": "There's a new version ({version}): review and accept it.",
+  "legal.dpa.pending": "Not accepted yet.",
+  "legal.dpa.read": "Read the agreement",
+  "legal.dpa.subprocessors": "See subprocessors",
+  "legal.dpa.accept": "I accept the agreement",
+  "legal.dpa.acceptedToast": "Agreement accepted.",
+  "legal.dpa.ownerOnly": "Only the owner or an admin can accept it.",
+  "legal.signup.accept": "I accept Barberlytics' {terms}, {privacy} and {dpa}.",
+  "legal.signup.terms": "terms",
+  "legal.signup.privacy": "privacy policy",
+  "legal.signup.dpa": "data processing agreement",
+  "legal.booking.policy": "Full privacy policy",
+};

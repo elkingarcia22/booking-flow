@@ -8,37 +8,45 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isApiError } from "@/lib/api";
 import { bookingApi } from "../api";
-import { FIRST_VISIT_PROMO, type PromoProblem } from "../pricing";
+import type { PromoProblem } from "../pricing";
 import { useBookingFlow } from "./BookingContext";
 
 const PROBLEM_KEYS: Record<PromoProblem, AppMessageKey> = {
   unknown: "booking.payment.promo.unknown",
   firstVisitOnly: "booking.payment.promo.firstVisitOnly",
   minAppointments: "booking.payment.promo.minAppointments",
+  notYet: "booking.payment.promo.notYet",
+  expired: "booking.payment.promo.expired",
+  exhausted: "booking.payment.promo.exhausted",
+  usedByClient: "booking.payment.promo.usedByClient",
+  services: "booking.payment.promo.services",
 };
 
 const problemOf = (error: unknown): PromoProblem => {
   const details = isApiError(error) ? error.details : undefined;
   const problem = details && typeof details === "object" && "problem" in details ? (details as { problem?: unknown }).problem : undefined;
-  return problem === "firstVisitOnly" || problem === "minAppointments" ? problem : "unknown";
+  return typeof problem === "string" && problem in PROBLEM_KEYS ? (problem as PromoProblem) : "unknown";
 };
 
 /** El cupón: se valida en el servidor y, si aplica, queda como un chip que se puede quitar, con lo que ahorra. */
 export function PromoField() {
   const t = useAppT();
-  const { state, dispatch, totals, fmt } = useBookingFlow();
+  const { state, dispatch, totals, fmt, shop } = useBookingFlow();
+  const scope = { appointments: state.items.length, branchId: state.branchId, serviceIds: state.items.flatMap((item) => item.serviceIds) };
   const [code, setCode] = React.useState("");
   // El cliente nuevo no tiene que saberse el cupón de bienvenida: se aplica solo, una vez (si lo quita, no vuelve).
   const autoTried = React.useRef(false);
   React.useEffect(() => {
-    if (autoTried.current || state.promo || !state.customer?.isNew || !FIRST_VISIT_PROMO) return;
+    if (autoTried.current || state.promo || !state.customer?.isNew || !shop.welcomePromo) return;
     autoTried.current = true;
     bookingApi
-      .checkPromo(state.token, { code: FIRST_VISIT_PROMO.code, appointments: state.items.length })
+      .checkPromo(state.token, { ...scope, code: shop.welcomePromo })
       .then((promo) => dispatch({ type: "setPromo", promo }))
       .catch(() => undefined);
-  }, [dispatch, state.customer?.isNew, state.items.length, state.promo, state.token]);
-  const check = useMutation({ mutationFn: () => bookingApi.checkPromo(state.token, { code, appointments: state.items.length }) });
+    // `scope` cambia con las citas; basta con mirarlas por su número, como antes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, shop.welcomePromo, state.customer?.isNew, state.items.length, state.promo, state.token]);
+  const check = useMutation({ mutationFn: () => bookingApi.checkPromo(state.token, { ...scope, code }) });
 
   if (state.promo) {
     return (

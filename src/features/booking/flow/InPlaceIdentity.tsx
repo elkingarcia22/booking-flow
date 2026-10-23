@@ -7,9 +7,9 @@ import { BookingFlowProvider, useBookingFlow } from "./BookingContext";
 const IDENTITY_ACTIONS: ReadonlySet<BookingAction["type"]> = new Set(["codeSent", "customerFound", "customerIsNew", "customerBlocked", "signOut"]);
 
 /**
- * El celular, el código y la ficha (`AgendaIdentity`) resueltos dentro de una hoja: la pantalla de
- * detrás (las horas, la agenda) se queda donde está. Sin esto, mandar el código llevaba la reserva al
- * paso «Escribe el código» y se veía detrás del modal.
+ * El celular y la ficha (`AgendaIdentity`, sin código salvo el número bloqueado) resueltos en su sitio
+ * o dentro de una hoja: la pantalla de detrás (las horas, la agenda, el pago) se queda donde está. Sin
+ * esto, mandar el código llevaba la reserva al paso «Escribe el código» y se veía detrás del modal.
  */
 export function InPlaceIdentity() {
   const flow = useBookingFlow();

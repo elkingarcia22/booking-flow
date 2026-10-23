@@ -40,6 +40,8 @@ export interface UseScheduleDragOptions {
   /** El cuerpo de la rejilla (columnas sin cabecera): de su alto salen los minutos por píxel. */
   bodyRef: React.RefObject<HTMLElement | null>;
   day: Date;
+  /** El día de una columna cuando no es el de la rejilla (la semana de una persona): la fecha al soltar es la suya. */
+  dayOf?: (resourceId: string) => Date;
   dayStart: number;
   dayEnd: number;
   step: number;
@@ -54,7 +56,7 @@ export interface UseScheduleDragOptions {
 /** Cuántos píxeles hay que moverse antes de que un clic pase a ser arrastre. */
 const DRAG_THRESHOLD_PX = 4;
 
-export function useScheduleDrag({ bodyRef, day, dayStart, dayEnd, step, onMove, onResize, validate, onRejected }: UseScheduleDragOptions) {
+export function useScheduleDrag({ bodyRef, day, dayOf, dayStart, dayEnd, step, onMove, onResize, validate, onRejected }: UseScheduleDragOptions) {
   const origin = React.useRef<DragOrigin | null>(null);
   const suppressClick = React.useRef(false);
   const [preview, setPreview] = React.useState<DragPreview | null>(null);
@@ -72,8 +74,11 @@ export function useScheduleDrag({ bodyRef, day, dayStart, dayEnd, step, onMove, 
   );
 
   const toDrop = React.useCallback(
-    (resourceId: string, startMin: number, endMin: number): ScheduleDrop => ({ resourceId, start: atMinutes(day, startMin), end: atMinutes(day, endMin) }),
-    [day]
+    (resourceId: string, startMin: number, endMin: number): ScheduleDrop => {
+      const target = dayOf?.(resourceId) ?? day;
+      return { resourceId, start: atMinutes(target, startMin), end: atMinutes(target, endMin) };
+    },
+    [day, dayOf]
   );
 
   const computePreview = React.useCallback(

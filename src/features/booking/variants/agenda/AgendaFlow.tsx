@@ -128,7 +128,7 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
   }, [pending, draftBarberId, draftServices, sameAsPending, isNextPart, view, ownScreen, held, dispatch]);
 
   // Al entrar desde la cabecera, la hoja se cierra sola: ya se sabe quién es.
-  if (signInOpen && state.customer && state.verified) setSignInOpen(false);
+  if (signInOpen && state.customer) setSignInOpen(false);
 
   // Cada vista empieza arriba; apartar horas en la agenda (que mueve el paso por dentro) no la mueve.
   const screen = ownScreen ? state.step : view;
@@ -290,11 +290,10 @@ export function AgendaFlow({ headerTrailing, onFinish }: AgendaFlowProps) {
       <BookingSheet
         open={signInOpen}
         onOpenChange={setSignInOpen}
-        // Con el celular ya dado (en la portada) la hoja solo confirma con el código.
-        title={t(state.phone ? "booking.payIdentity.title" : "booking.agenda.signInTitle")}
-        description={t(state.phone ? "booking.payIdentity.codeLead" : "booking.agenda.signInLead")}
+        title={t(state.token && !state.customer ? "booking.payIdentity.newTitle" : "booking.agenda.signInTitle")}
+        description={t("booking.agenda.signInLead")}
       >
-        {/* El código se resuelve en la hoja: la agenda de detrás no pasa a «Escribe el código». */}
+        {/* Quién es se resuelve en la hoja, sin código: la agenda de detrás no cambia de pantalla. */}
         <InPlaceIdentity />
       </BookingSheet>
     </>

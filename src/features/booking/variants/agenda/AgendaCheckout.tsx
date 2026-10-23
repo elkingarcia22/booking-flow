@@ -31,12 +31,12 @@ export function CheckoutSection({ index, title, children }: { index: number; tit
   );
 }
 
-/** Quién reserva, ya verificado: su nombre y su celular, con «No soy yo» que no toca las citas. */
+/** Quién reserva (reconocido por su celular, sin código): su nombre y su celular, con «No soy yo» que no toca las citas. */
 function WhoBooks() {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
-  // El código se resuelve aquí mismo: la reserva no pasa a la pantalla «Escribe el código».
-  if (!state.customer || !state.verified) return <InPlaceIdentity />;
+  // Quién es se resuelve aquí mismo, sin código: la reserva no cambia de pantalla.
+  if (!state.customer) return <InPlaceIdentity />;
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3">
       <IconTile size="md" shape="circle" tone="positive" icon={<ThemaIcon name="check" />} />

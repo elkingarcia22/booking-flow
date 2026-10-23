@@ -22,8 +22,8 @@ export type DarkDepth = "standard" | "deep";
 
 /**
  * Nivel del tema. `premium` activa la hoja `src/styles/themes/premium.css`
- * (sombras con filo de luz, barniz sobre las cards, brillo del botón primario,
- * halo en el ítem activo) a través de `data-tier` en <html>. Es una capa de
+ * (sombras con filo de luz, barniz sobre las cards y halo en el ítem activo;
+ * los botones son planos en todos los temas) a través de `data-tier` en <html>. Es una capa de
  * acabado, no de color: el color sigue saliendo de los tokens.
  */
 export type ThemeTier = "standard" | "premium";
@@ -222,21 +222,6 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     neutral: "tinted",
   },
   {
-    id: "orange",
-    name: "Naranja",
-    description: "Energético; funciona bien en productos de aprendizaje.",
-    primary: { light: "#EA580C", dark: "#FB923C" },
-    neutral: "gray",
-  },
-  {
-    id: "rose",
-    name: "Rosa",
-    description: "Cálido y humano, para experiencias de personas.",
-    primary: { light: "#E11D48", dark: "#FB7185" },
-    neutral: "gray",
-    fonts: { body: "plus-jakarta" },
-  },
-  {
     id: "crimson",
     name: "Rojo",
     description: "Carmesí decidido; para marcas con carácter y avisos que importan.",
@@ -246,26 +231,11 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     // Rojo → naranja → ámbar: la IA se calienta en vez de irse al verde.
     ai: { start: "#EF4444", end: "#F59E0B", stops: ["#EF4444", "#F0653A", "#F58A2A", "#F58A2A", "#F5B01B"] },
   },
-  {
-    id: "amber",
-    name: "Ámbar",
-    description: "Dorado sobrio, de lectura cómoda en oscuro.",
-    primary: { light: "#D97706", dark: "#FBBF24" },
-    neutral: "gray",
-  },
-  {
-    id: "graphite",
-    name: "Grafito",
-    description: "Monocromo: primario casi negro y neutros puros.",
-    primary: { light: "#1F2937", dark: "#E5E7EB" },
-    neutral: "gray",
-    neutralHue: 220,
-    fonts: { body: "geist", heading: "fraunces" },
-  },
 ];
 
 export const DEFAULT_THEME_ID = "premium";
 
 export function findPreset(id: string | null | undefined): ThemePreset {
-  return THEME_PRESETS.find((preset) => preset.id === id) ?? THEME_PRESETS[0];
+  // Un id que ya no existe (un tema retirado que quedó guardado) cae en el tema por defecto.
+  return THEME_PRESETS.find((preset) => preset.id === id) ?? THEME_PRESETS.find((preset) => preset.id === DEFAULT_THEME_ID) ?? THEME_PRESETS[0];
 }

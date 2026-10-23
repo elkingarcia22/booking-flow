@@ -36,8 +36,8 @@ export interface ChatVoiceModeProps {
   /** Quién habla en conversación («Clipper está hablando»). */
   agentName?: string;
   /**
-   * `immersive` (por defecto): siempre oscuro, con la malla de IA. `page`: sigue el tema y el modo de la
-   * página, con `backdrop` detrás (la reserva pone el fondo de la portada de Clipper).
+   * `immersive` (por defecto): siempre oscuro, con la malla de IA. `page`: el de Clipper, que sigue el
+   * tema y el modo de la página sobre su rejilla de puntos (o sobre `backdrop`, si se pasa).
    */
   appearance?: "immersive" | "page";
   backdrop?: React.ReactNode;
@@ -151,7 +151,7 @@ function VoiceSession({ onClose, onWrite, onSend, ask: askProp, lang: langProp, 
       data-testid="chat-voice"
       className={cn("fixed inset-0 z-dialog flex flex-col overflow-hidden bg-background text-text-primary outline-none", appearance === "immersive" && "dark ai-mesh-agent")}
     >
-      {backdrop}
+      {backdrop ?? (appearance === "page" && <div aria-hidden className="chat-dots pointer-events-none absolute inset-0" />)}
       <header className="relative flex shrink-0 items-center gap-3 px-4 py-3 sm:px-6">
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
           <ThemaIcon className="text-current" name="arrowLeft" size="xs" decorative />
@@ -251,7 +251,7 @@ function VoiceSession({ onClose, onWrite, onSend, ask: askProp, lang: langProp, 
             data-testid="chat-voice-send"
             className={cn(
               "flex size-11 shrink-0 items-center justify-center rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-              canSend ? "bg-ai-gradient text-text-inverse hover:-translate-y-0.5 hover:brightness-110" : "cursor-not-allowed border border-border/70 bg-transparent text-text-muted"
+              canSend ? "bg-ai-gradient text-text-inverse hover:brightness-110" : "cursor-not-allowed border border-border/70 bg-transparent text-text-muted"
             )}
           >
             <ThemaIcon className="text-current" name="send" size="sm" decorative />

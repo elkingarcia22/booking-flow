@@ -8,9 +8,9 @@
   }
 }
 
-/* Más específico que el brillo del botón primario del nivel premium (`premium.css`), que lo taparía. */
+/* Plano, como todos los botones: sin la sombra de color que lo levantaba. */
 [data-slot="button"].ai-pole-button.ai-pole-button.ai-pole-button {
-  box-shadow: var(--shadow-ai-premium);
+  box-shadow: none;
   /* Blanco o tinta oscura según el tema: lo decide `buildTokens` por el contraste con el gradiente. */
   color: var(--color-ai-ink);
   background-image:

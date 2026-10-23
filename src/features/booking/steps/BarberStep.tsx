@@ -75,11 +75,15 @@ export function BarberStep() {
                   </Text>
                   <Text size="xs" tone="secondary" className="flex flex-wrap items-center gap-x-1">
                     {barber.id === lastBarberId ? <span className="font-medium text-primary">{t("booking.barber.lastTime")}</span> : barber.level}
-                    <span aria-hidden>·</span>
-                    <span className="text-warning" aria-hidden>
-                      ★
-                    </span>
-                    <span className="tabular-nums">{barber.rating.toFixed(1)}</span>
+                    {barber.reviews > 0 && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="text-warning" aria-hidden>
+                          ★
+                        </span>
+                        <span className="tabular-nums">{barber.rating.toFixed(1)}</span>
+                      </>
+                    )}
                   </Text>
                   <Text size="sm" weight="medium" tabular as="span">
                     {fmt.money(itemPrice({ serviceIds, barberId: barber.id }, catalog))}

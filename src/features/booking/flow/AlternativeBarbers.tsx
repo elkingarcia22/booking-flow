@@ -73,11 +73,15 @@ export function AlternativeBarbers({ day, onDayChange }: { day: Date; onDayChang
                       {barber.name}
                     </Text>
                     <Text size="xs" tone="muted" className="flex items-center gap-1" tabular>
-                      {barber.level && <span>{barber.level} ·</span>}
-                      <span className="text-warning" aria-hidden>
-                        ★
-                      </span>
-                      {barber.rating.toFixed(1)}
+                      {barber.level && <span>{barber.level}{barber.reviews > 0 && " ·"}</span>}
+                      {barber.reviews > 0 && (
+                        <>
+                          <span className="text-warning" aria-hidden>
+                            ★
+                          </span>
+                          {barber.rating.toFixed(1)}
+                        </>
+                      )}
                     </Text>
                   </div>
                   <Badge variant={sameDay ? "positive" : "neutral"} className="shrink-0">

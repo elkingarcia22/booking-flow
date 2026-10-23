@@ -5,6 +5,13 @@
  * con `prefers-reduced-motion`.
  */
 
+/* La rejilla de puntos de fondo de Clipper (portada y voz), que se desvanece hacia los bordes. */
+.chat-dots {
+  background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 35%, #000 40%, transparent 100%);
+}
+
 /* El resplandor detrás de las ondas del modo voz. */
 .chat-waves-glow {
   background: radial-gradient(closest-side, rgba(var(--color-ai-stop-2-rgb), 0.35), rgba(var(--color-ai-stop-1-rgb), 0.15) 55%, transparent);

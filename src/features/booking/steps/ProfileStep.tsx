@@ -3,9 +3,7 @@ import { useAppT } from "@/app/i18n";
 import { Field, PhoneInput } from "@/components/forms";
 import { Text } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/feedback/Spinner";
 import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
@@ -14,6 +12,8 @@ import { toastMissing } from "../flow/missingData";
 import { StepLayout } from "../flow/StepLayout";
 import { defaultBranchId } from "../bookingState";
 import { useCreateCustomerMutation } from "../queries";
+import { ConsentFields } from "../flow/ConsentFields";
+import { useConsentBranchId } from "../flow/consentPack";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_NAME = 2;
@@ -30,6 +30,7 @@ export function ProfileStep() {
   // Si vuelve atrás desde la cita, sus datos siguen ahí.
   const [values, setValues] = React.useState(() => state.pendingProfile ?? { firstName: "", lastName: "", email: "", marketing: false });
   const [touched, setTouched] = React.useState(false);
+  const consentBranchId = useConsentBranchId();
   const serverFields = isApiError(create.error) ? create.error.fieldErrors : undefined;
   const errors = {
     firstName: values.firstName.trim().length < MIN_NAME ? t("booking.profile.firstNameError") : serverFields?.firstName?.[0],
@@ -42,7 +43,7 @@ export function ProfileStep() {
     event.preventDefault();
     setTouched(true);
     if (toastMissing(t, [errors.firstName, errors.lastName, errors.email])) return;
-    const profile = { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing };
+    const profile = { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing, branchId: consentBranchId };
     if (!state.verified) return dispatch({ type: "profileDrafted", profile, onlyBranchId: shop.branches.length === 1 ? (shop.branches[0]?.id ?? null) : null });
     create.mutate(
       profile,
@@ -77,21 +78,12 @@ export function ProfileStep() {
         <Field label={t("booking.profile.phone")}>
           <PhoneInput value={state.phone} disabled />
         </Field>
-        <div className="flex items-start gap-3">
-          <Checkbox id="booking-marketing" checked={values.marketing} onCheckedChange={(checked) => setValues((current) => ({ ...current, marketing: checked === true }))} />
-          <Label htmlFor="booking-marketing" className="font-normal">
-            {t("booking.profile.marketing")}
-          </Label>
-        </div>
+        <ConsentFields id="booking-marketing" marketing={values.marketing} onMarketingChange={(marketing) => setValues((current) => ({ ...current, marketing }))} />
         {create.isError && !serverFields && (
           <Text size="sm" tone="negative" role="alert">
             {describeError(create.error).description}
           </Text>
         )}
-        <Text size="xs" tone="muted" className="flex items-center gap-1.5">
-          <ThemaIcon name="lock" size="xs" />
-          {t("booking.profile.privacy")}
-        </Text>
       </StepLayout>
     </form>
   );

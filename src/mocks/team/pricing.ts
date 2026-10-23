@@ -1,13 +1,8 @@
 import type { MockCatalogService } from "../services/seed";
-import { isBarberRole, type MockServiceOverride, type MockTeamMember } from "./seed";
+import { isBarberRole, LEVELS, type MockServiceOverride, type MockTeamMember } from "./seed";
 
-/** Cuánto sobre el precio de la carta cobra cada nivel. */
-const LEVEL_FACTOR: Readonly<Record<string, number>> = {
-  lvl_aprendiz: 0.8,
-  lvl_junior: 0.9,
-  lvl_senior: 1,
-  lvl_master: 1.25,
-};
+/** Cuánto sobre el precio de la carta cobra cada nivel (el factor de cada nivel de la semilla). */
+const LEVEL_FACTOR: Readonly<Record<string, number>> = Object.fromEntries(LEVELS.map((level) => [level.id, level.priceFactor ?? 1]));
 
 /** Entre −8 % y +8 % según la persona, para que dos del mismo nivel no cobren igual. */
 const personalShift = (index: number): number => (((index * 37) % 9) - 4) * 0.02;

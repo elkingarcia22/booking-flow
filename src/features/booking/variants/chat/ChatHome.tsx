@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { STEP_WIDTH } from "../../flow/stepWidth";
 
-import "./chatHome.css";
 
 interface HomeProps {
   onStart: (text?: string) => void;
@@ -73,7 +72,7 @@ export function ChatHome(props: HomeProps) {
   const { layout, isPhone } = useBookingFlow();
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div aria-hidden className="clipper-dots pointer-events-none absolute inset-0" />
+      <div aria-hidden className="chat-dots pointer-events-none absolute inset-0" />
       <div className={cn("relative mx-auto flex w-full flex-1 flex-col justify-center gap-7 px-5 py-10", STEP_WIDTH[layout])}>
         <div className="flex flex-col items-center gap-5 text-center">
           {/* El orbe de Clipper: un poste de barbería hecho esfera, con el gradiente de IA. */}

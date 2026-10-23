@@ -5,6 +5,8 @@ import { useActiveConversation, useChatActions, useChatContext } from "./useChat
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { ChatGreeting } from "./ChatGreeting";
+import { ChatIdeas } from "./ChatIdeas";
+import "./chat.css";
 import { ChatHistoryPanel } from "./ChatHistoryPanel";
 
 export interface ChatScreenProps {
@@ -17,8 +19,9 @@ export interface ChatScreenProps {
 
 /**
  * El chat a pantalla completa: lo que enseña el modo «Agente IA» del shell.
- * Una conversación nueva arranca en el centro, con el saludo, la caja y las
- * preguntas de arranque; con hilo, los mensajes ocupan la pantalla y la
+ * Una conversación nueva arranca en la portada de Clipper (la misma de la
+ * reserva): rejilla de puntos, orbe y saludo, la caja y las ideas numeradas
+ * debajo; con hilo, los mensajes ocupan la pantalla y la
  * caja se queda abajo. A la izquierda, el historial con «Nuevo chat», que
  * se pliega para dejarle todo el ancho al hilo.
  */
@@ -37,6 +40,8 @@ export function ChatScreen({ history = true, onMore, className }: ChatScreenProp
   }, [conversation?.id]);
 
   const composerProps = {
+    // Adjuntar se apaga mientras quien responde no lea archivos: ofrecerlo y descartarlos engaña.
+    attach: false,
     value: draft,
     onChange: setDraft,
     onSend: (text: string) => actions.send(text),
@@ -63,11 +68,13 @@ export function ChatScreen({ history = true, onMore, className }: ChatScreenProp
         </div>
       </div>
     ) : (
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 sm:px-6">
-        <div className="mx-auto flex w-full max-w-3xl flex-col py-8">
-          <ChatGreeting name={user.name} className="mb-8" />
-          {/* Las preguntas de arranque van como chips encima de la caja: se leen de un vistazo y se tocan una vez. */}
-          <ChatComposer {...composerProps} autoFocus chips={suggestions} onChip={(chip) => actions.send(chip)} />
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 sm:px-6">
+        {/* La portada de Clipper: su rejilla de puntos, el orbe y el saludo, la caja y las ideas numeradas debajo. */}
+        <div aria-hidden className="chat-dots pointer-events-none absolute inset-0" />
+        <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-7 py-10">
+          <ChatGreeting name={user.name} />
+          <ChatComposer {...composerProps} autoFocus />
+          <ChatIdeas ideas={suggestions ?? []}onPick={(idea) => actions.send(idea)} />
         </div>
       </div>
     );

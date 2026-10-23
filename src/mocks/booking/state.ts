@@ -24,12 +24,12 @@ export interface MockReservation {
   lines: MockBookingLine[];
   products: { productId: string; name: string; qty: number; price: number }[];
   promoCode: string | null;
-  totals: { services: number; products: number; discount: number; subtotal: number; tax: number; tip: number; fee: number; feeName: string | null; gift: number; reward: number; prepaid: number; total: number };
+  totals: { services: number; products: number; discount: number; subtotal: number; tax: number; taxIncluded?: boolean; tip: number; fee: number; feeName: string | null; gift: number; reward: number; prepaid: number; total: number };
   /** De dónde vino quien reservó (UTM del enlace), si se sabe. */
   utm?: { source: string; medium: string; campaign: string } | null;
   /** La tarjeta de regalo usada (su código), si la hubo. */
   giftCode?: string | null;
-  payment: { method: "card" | "wallet" | "shop" | "credit" | "gift"; status: "paid" | "pending"; last4: string | null; brand: string | null; paid: number };
+  payment: { method: "card" | "wallet" | "shop" | "credit" | "gift" | "pse" | "nequi"; status: "paid" | "pending"; last4: string | null; brand: string | null; paid: number };
 }
 
 export interface MockSavedCard {
@@ -42,17 +42,58 @@ export interface MockSavedCard {
 }
 
 /** Un mensaje programado al cliente (WhatsApp por defecto): lo envía el backend real a su hora. */
+/** Lo que respondió un cliente por WhatsApp, ya clasificado y ligado a su cita. */
+export interface MockInboundReply {
+  /** El id de WhatsApp del mensaje (para no aplicarlo dos veces). */
+  id: string;
+  at: string;
+  from: string;
+  intent: "confirm" | "reschedule" | "cancel" | "stop" | "start" | "help" | "other";
+  text: string;
+  /** Por dónde llegó; sin él, WhatsApp. */
+  channel?: "whatsapp" | "sms";
+  appointmentId: string | null;
+  clientId: string | null;
+}
+
 export interface MockOutboxMessage {
   id: string;
   appointmentId: string;
   clientId: string;
   to: string;
-  channel: "whatsapp" | "sms";
-  kind: "confirmation" | "rescheduled" | "reminder24h" | "reminder2h" | "slotFreed";
+  channel: "whatsapp" | "sms" | "email";
+  /**
+   * `manual`: lo escribió el equipo desde la ficha del cliente y salió por wa.me; no pasa por la cola.
+   * `receipt` y `rebookLink`: los mandó el equipo desde el panel de la cita (el recibo, el enlace para
+   * reagendar), por SMS o correo; salen en el momento.
+   */
+  kind: "confirmation" | "rescheduled" | "reminder24h" | "reminder2h" | "reminder" | "slotFreed" | "manual" | "reactivation" | "receipt" | "rebookLink" | "payLink" | "queueAlmost" | "giftCard" | "depositLink" | "birthday" | "thanks" | "reviewRequest" | "campaign";
+  /** Con `reminder`: a cuántas horas de la cita sale (las que eligió la barbería en Configuración). */
+  hoursBefore?: number;
   sendAt: string;
-  status: "scheduled" | "sent" | "cancelled";
+  /** `failed`: WhatsApp lo rechazó; se ve con su motivo y no se reintenta solo. */
+  status: "scheduled" | "sent" | "cancelled" | "failed";
+  /** Cuándo salió (o se intentó). */
+  sentAt?: string;
+  /** Mensajes que no son de una cita (la fila sin cita): su entrada y los valores de la plantilla ya listos. */
+  queueEntryId?: string;
+  params?: string[];
+  /** Ya está en la cola de WhatsApp del servidor (la app solo refleja lo que pase allí). */
+  queued?: boolean;
+  /** Sin WhatsApp conectado: se dio por enviado sin salir del sistema. */
+  simulated?: boolean;
+  /** El id que da WhatsApp al mensaje enviado. */
+  providerId?: string | null;
+  error?: string;
+  /** El texto de un mensaje manual y para qué era (gracias, volver, cumpleaños, libre). */
+  body?: string;
+  purpose?: "thanks" | "rebook" | "birthday" | "free";
+  /** Quién lo escribió (mensajes manuales). */
+  by?: string;
   /** «Se liberó una hora»: cuál, para reservarla en un toque. */
   offer?: { start: string; barberId: string; branchId: string };
+  /** La campaña a la que pertenece (Clientes › Campañas). */
+  campaignId?: string;
 }
 
 /** Una reseña de un barbero: de una cita que ocurrió (o sembrada para la demo, sin cita). */
@@ -66,6 +107,8 @@ export interface MockReview {
   rating: number;
   comment: string;
   createdAt: string;
+  /** Reseña de ejemplo de la demo (no la dejó un cliente): se muestra marcada y nunca con las reales. */
+  sample?: boolean;
 }
 
 /** Una tarjeta de regalo: se compra para alguien y se gasta en reservas hasta agotar el saldo. */
@@ -78,6 +121,8 @@ export interface MockGiftCard {
   recipientContact: string;
   message: string;
   createdAt: string;
+  /** El mensaje con el código que se le mandó a quien la recibe (el último, si se reenvió). */
+  messageId?: string | null;
 }
 
 /** Llegó a un paso de la reserva: anónimo, para medir dónde se van. */
@@ -106,6 +151,8 @@ export interface MockBookingState {
   reservations: MockReservation[];
   /** id de cliente → saldo a favor. */
   credits: Record<string, number>;
+  /** Cada uso de un cupón (reserva o caja): con esto se cumplen los topes. */
+  couponRedemptions?: { code: string; clientId: string; at: string; source: "booking" | "checkout"; ref: string }[];
   /** id de cliente → cancelaciones hechas en línea. */
   cancellations: Record<string, number>;
   /** Pasos a los que llegó cada sesión (ver funnel.ts). */
@@ -120,6 +167,10 @@ export interface MockBookingState {
   reviews?: MockReview[];
   /** Confirmaciones y recordatorios programados por cada reserva (ver reminders.ts). */
   outbox?: MockOutboxMessage[];
+  /** Las respuestas de los clientes por WhatsApp ya aplicadas (ver replies.ts). */
+  inbound?: MockInboundReply[];
+  /** Hasta qué respuesta de la bandeja del servidor se aplicó. */
+  inboxCursor?: number;
   /** id de cliente → sus tarjetas tokenizadas. Sin entrada, la clienta de la demo trae las suyas (`DEMO_CARDS`). */
   cards?: Record<string, MockSavedCard[]>;
   /** Ya se le pusieron a la clienta de la demo sus personas guardadas (una sola vez). */
@@ -155,6 +206,3 @@ export const BLOCKED_PHONE = "+573009999999";
 
 /** El código que «llega» por SMS en la demo para entrar a «Mis citas». */
 export const DEMO_OTP = "246810";
-
-/** Tarjeta de prueba que el banco rechaza. */
-export const DECLINED_CARD = "4000000000000002";

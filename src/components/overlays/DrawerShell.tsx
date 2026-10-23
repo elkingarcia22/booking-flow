@@ -10,6 +10,7 @@ import {
   SheetTrigger,
   useBodyScrollLock,
 } from "@/components/ui/sheet"
+import { PANEL_FOOTER_SLOT_CLASS, PanelFooterSlotProvider, usePanelFooterSlot } from "./PanelFooter"
 
 export interface DrawerShellProps {
   /** Controlled open state */
@@ -24,6 +25,8 @@ export interface DrawerShellProps {
   description?: string
   /** Avatar o icono a la izquierda del título: quién o qué es lo que se abre. */
   leading?: React.ReactNode
+  /** Botones de icono en la cabecera, antes del cierre (terciarios, con su tooltip). */
+  headerActions?: React.ReactNode
   /** Drawer body content */
   children?: React.ReactNode
   /** Custom footer content (replaces actions) */
@@ -119,6 +122,7 @@ export function DrawerShell({
   title,
   description,
   leading,
+  headerActions,
   children,
   footer,
   actions,
@@ -136,6 +140,7 @@ export function DrawerShell({
   overlayStyle,
 }: DrawerShellProps) {
   const sizeClass = sideSizeClasses[side][size]
+  const [footerSlot, setFooterSlot] = usePanelFooterSlot()
 
   // Un drawer no modal tapa la página igual que uno modal, pero Radix ya no le
   // congela el fondo, así que lo pide por su cuenta mientras está abierto.
@@ -157,12 +162,14 @@ export function DrawerShell({
         onOpenAutoFocus={onOpenAutoFocus}
       >
         {(title || description) && (
-          <SheetHeader className={cn("border-b bg-muted/30", leading && "flex-row items-center gap-3")}>
+          <SheetHeader className={cn("border-b bg-muted/30", (leading || headerActions) && "flex-row items-center gap-3")}>
             {leading && <div className="shrink-0">{leading}</div>}
-            <div className={cn(leading && "min-w-0 flex-1 space-y-1.5")}>
+            <div className={cn((leading || headerActions) && "min-w-0 flex-1 space-y-1.5")}>
               {title && <SheetTitle>{title}</SheetTitle>}
               {description && <SheetDescription>{description}</SheetDescription>}
             </div>
+            {/* El cierre de la hoja va en la esquina: las acciones le dejan su sitio. */}
+            {headerActions && <div className={cn("flex shrink-0 items-center gap-1", showCloseButton && "mr-8")}>{headerActions}</div>}
           </SheetHeader>
         )}
         
@@ -178,8 +185,9 @@ export function DrawerShell({
             !disablePadding && "p-4"
           )}
         >
-          {children}
+          <PanelFooterSlotProvider value={footerSlot}>{children}</PanelFooterSlotProvider>
         </div>
+        <div ref={setFooterSlot} className={PANEL_FOOTER_SLOT_CLASS} />
 
         {footer ? (
           footer

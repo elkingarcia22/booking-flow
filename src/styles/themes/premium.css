@@ -61,20 +61,9 @@ html[data-tier="premium"].dark {
   --shadow-rail: inset 0 1px 0 0 hsl(0 0% 100% / 0.06), 0 18px 44px -12px rgba(0, 0, 0, 0.85);
 }
 
-/* ── Botón primario: brillo y glow ───────────────────────────────────── */
-/* Un sheen de arriba abajo y un filo de luz interior; en hover, el glow del
-   tema. Solo la variante sólida: outline y ghost siguen siendo silenciosas. */
-html[data-tier="premium"] [data-slot="button"][data-variant="default"] {
-  background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.16), hsl(0 0% 100% / 0) 58%);
-  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.24), 0 1px 2px hsl(var(--primary) / 0.3);
-  transition-property: box-shadow, transform, background-color, color;
-}
-html[data-tier="premium"] [data-slot="button"][data-variant="default"]:hover:not(:disabled) {
-  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.24), var(--shadow-glow-brand);
-}
-html[data-tier="premium"] [data-slot="button"][data-variant="default"]:active:not(:disabled) {
-  box-shadow: inset 0 1px 2px hsl(0 0% 0% / 0.25);
-}
+/* ── Botones ─────────────────────────────────────────────────────────── */
+/* Sin brillo, filo de luz, glow ni sombra hundida: el botón es plano en todos los temas
+   (lo pidió la marca); sus estados son de color, en `button.tsx`. */
 
 /* ── Navegación: el ítem activo lleva un halo del primario, no un bloque ──
    Solo en navegaciones de fila o de rail, donde el ítem es una pastilla con

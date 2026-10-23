@@ -23,13 +23,15 @@ const Breadcrumbs = React.forwardRef<HTMLDivElement, BreadcrumbsProps>(
       <nav
         ref={ref}
         aria-label="Breadcrumb"
-        className={cn("flex items-center space-x-1 text-xs", className)}
+        className={cn("flex min-w-0 items-center space-x-1 text-xs", className)}
         {...props}
       >
         {items.map((raw, index) => {
           const item = typeof raw === "string" ? { label: raw } : raw
           const isLast = index === items.length - 1
           const isClickable = !isLast && !!item.onClick
+          // En el celular solo cabe la página actual: los tramos de antes se esconden y ella se recorta.
+          const ancestor = !isLast && "max-sm:hidden"
 
           return (
             <React.Fragment key={index}>
@@ -37,7 +39,7 @@ const Breadcrumbs = React.forwardRef<HTMLDivElement, BreadcrumbsProps>(
                 <button
                   type="button"
                   onClick={item.onClick}
-                  className="rounded-sm text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className={cn("shrink-0 rounded-sm text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50", ancestor)}
                 >
                   {item.label}
                 </button>
@@ -45,14 +47,15 @@ const Breadcrumbs = React.forwardRef<HTMLDivElement, BreadcrumbsProps>(
                 <span
                   className={cn(
                     "transition-colors",
-                    isLast ? "text-text-primary font-medium" : "text-text-muted cursor-default"
+                    isLast ? "min-w-0 truncate text-text-primary font-medium" : "shrink-0 text-text-muted cursor-default",
+                    ancestor
                   )}
                 >
                   {item.label}
                 </span>
               )}
               {!isLast && (
-                <ChevronRight className="h-3 w-3 text-text-muted shrink-0" />
+                <ChevronRight className="h-3 w-3 text-text-muted shrink-0 max-sm:hidden" />
               )}
             </React.Fragment>
           )

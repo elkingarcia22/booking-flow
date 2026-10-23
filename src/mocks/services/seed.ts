@@ -31,6 +31,8 @@ export interface MockCatalogService {
   durationMin: number;
   /** Porcentaje (0–100) o `null` si no lleva impuesto. */
   taxRate: number | null;
+  /** El precio en cada sucursal que no usa el general (id de sucursal → precio). */
+  branchPrices?: Record<string, number>;
   visibility: MockVisibility;
   /** Sucursales en las que se ofrece. */
   activeBranchIds: string[];
@@ -45,9 +47,27 @@ export interface MockCatalogService {
   createdAt: string;
 }
 
+export interface MockServiceResource {
+  id: string;
+  name: string;
+  description: string;
+  units: number;
+  serviceIds: string[];
+}
+
 export interface MockServicesState {
   categories: MockServiceCategory[];
   items: MockCatalogService[];
+  /** Los recursos especiales. Opcional: una base guardada antes de que existieran no los trae. */
+  resources?: MockServiceResource[];
+}
+
+/** El local tiene un solo lavacabezas y un solo vaporizador: dos citas que los usan a la vez chocan. */
+export function seedResources(): MockServiceResource[] {
+  return [
+    { id: "res_lavado", name: "Sillón de lavado", description: "El lavacabezas del fondo, para tratamientos y color.", units: 1, serviceIds: ["svc_tratamiento", "svc_premium", "svc_tinte"] },
+    { id: "res_vapor", name: "Vaporizador de toallas", description: "Toallas calientes para el afeitado a navaja.", units: 1, serviceIds: ["svc_afeitado", "svc_premium"] },
+  ];
 }
 
 /** La categoría a la que caen los servicios cuando se borra la suya. No se puede borrar. */
@@ -134,5 +154,5 @@ export function seedServices(): MockServicesState {
     { ...blank(), id: "svc_tinte", kind: "service", name: "Tinte de cabello", description: "Color completo o cubrimiento de canas.", categoryId: "cat_extras", price: 70, cost: 30, durationMin: 60, visibility: "private", taxRate: 8, imageUrl: SERVICE_PHOTOS.svc_tinte ?? null },
     { ...blank(), id: "svc_cera", kind: "service", name: "Depilación con cera", description: "", categoryId: UNCATEGORIZED_ID, price: 20, cost: null, durationMin: 20, activeBranchIds: ["nc", "ri"] },
   ];
-  return { categories: [...CATEGORIES], items: [...fromAgenda, ...extras] };
+  return { categories: [...CATEGORIES], items: [...fromAgenda, ...extras], resources: seedResources() };
 }

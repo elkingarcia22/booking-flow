@@ -72,6 +72,18 @@ export function galleryFor(index: number): string[] {
   return Array.from({ length: count }, (_, offset) => WORK_PHOTOS[(index * 3 + offset) % WORK_PHOTOS.length]);
 }
 
+/** El texto de la nota de cita que promete foto: la semilla le pone la foto que dice traer. */
+export const REFERENCE_PHOTO_NOTE = "Trae foto de referencia";
+
+/**
+ * Las fotos del corte que el cliente dice traer: una o dos de las de trabajos, según `roll`
+ * (sale del id de la cita, no del dado, para no mover la agenda sembrada).
+ */
+export function referencePhotosFor(roll: number): string[] {
+  const first = WORK_PHOTOS[roll % WORK_PHOTOS.length];
+  return roll % 3 === 0 ? [first, WORK_PHOTOS[(roll + 4) % WORK_PHOTOS.length]] : [first];
+}
+
 /** La foto de cada servicio. La depilación con cera sigue sin foto: es la ficha a medio llenar. */
 export const SERVICE_PHOTOS: Readonly<Record<string, string>> = {
   svc_corte: square("photo-1593702275687-f8b402bf1fb5"),

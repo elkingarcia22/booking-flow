@@ -23,8 +23,8 @@ interface SendReceiptDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/** Un canal: se marca y, marcado, muestra a dónde va. */
-function ChannelCard({ id, icon, label, checked, onCheckedChange, children }: { id: string; icon: IconName; label: string; checked: boolean; onCheckedChange: (checked: boolean) => void; children: React.ReactNode }) {
+/** Un canal: se marca y, marcado, muestra a dónde va. También lo usa el panel de la cita para mandar el recibo o el enlace. */
+export function ChannelCard({ id, icon, label, checked, onCheckedChange, children }: { id: string; icon: IconName; label: string; checked: boolean; onCheckedChange: (checked: boolean) => void; children: React.ReactNode }) {
   return (
     <div className={cn("flex flex-col rounded-2xl border transition-colors", checked ? "border-primary/60 bg-primary/5" : "border-border")}>
       <label htmlFor={id} className="flex cursor-pointer items-center gap-3 p-3">

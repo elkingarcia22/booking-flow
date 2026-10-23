@@ -6,6 +6,8 @@
  * que ve el cliente es el mismo que se le cobra.
  */
 
+import { taxOn } from "@/features/branches/tax";
+
 export type TipKind = "percent" | "amount";
 
 export interface TipOption {
@@ -23,9 +25,19 @@ export interface Promo {
   firstVisitOnly?: boolean;
   /** Pide al menos este número de citas en la misma reserva. */
   minAppointments?: number;
+  /** Desde y hasta qué día vale («AAAA-MM-DD», incluidos); sin ellos, siempre. */
+  validFrom?: string | null;
+  validTo?: string | null;
+  /** Solo si la cuenta lleva alguno de estos servicios; vacío = cualquiera. */
+  serviceIds?: readonly string[];
+  /** Cuántas veces se puede usar en total y por cliente; `null` = sin tope. */
+  maxUses?: number | null;
+  perClient?: number | null;
+  /** Apagado no se acepta (se conserva para el historial). */
+  active?: boolean;
 }
 
-/** Los cupones que acepta la demo. En producción los define la barbería. */
+/** Los cupones con los que nace la demo; la barbería crea los suyos en Configuración › Cupones. */
 export const PROMOS: readonly Promo[] = [
   { code: "BIENVENIDO10", type: "percent", value: 10, firstVisitOnly: true },
   { code: "FAMILIA15", type: "percent", value: 15, minAppointments: 2 },
@@ -59,24 +71,39 @@ export function coverByPackages(appointments: readonly (readonly { serviceId: st
   return { amount: round2(amount), used };
 }
 
-/** El cupón de bienvenida (solo primera visita): se le ofrece y aplica solo al cliente nuevo. */
-export const FIRST_VISIT_PROMO: Promo | undefined = PROMOS.find((promo) => promo.firstVisitOnly);
-
-export type PromoProblem = "unknown" | "firstVisitOnly" | "minAppointments";
+export type PromoProblem = "unknown" | "firstVisitOnly" | "minAppointments" | "notYet" | "expired" | "exhausted" | "usedByClient" | "services";
 
 export interface PromoContext {
   isNewClient: boolean;
   appointments: number;
+  /** Hoy en la sede («AAAA-MM-DD»), para las fechas del cupón. */
+  today?: string;
+  /** Los servicios de la cuenta, para los cupones de ciertos servicios. */
+  serviceIds?: readonly string[];
+  /** Cuántas veces ya se usó en total y cuántas este cliente. */
+  uses?: number;
+  clientUses?: number;
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
-/** El cupón por su código (sin importar mayúsculas), o por qué no aplica. */
-export function findPromo(code: string, context: PromoContext): { promo: Promo } | { problem: PromoProblem } {
-  const promo = PROMOS.find((item) => item.code === code.trim().toUpperCase());
+/** Un código escrito como sea («ver ano10 ») a como se guarda («VERANO10»). */
+export const normalizePromoCode = (code: string): string => code.trim().toUpperCase().replace(/\s+/g, "");
+
+/**
+ * El cupón por su código (sin importar mayúsculas), o por qué no aplica. La lista es la de la barbería (por defecto,
+ * la de la demo); el contexto trae lo que solo sabe el servidor: hoy en la sede, los servicios y cuántas veces se usó.
+ */
+export function findPromo(code: string, context: PromoContext, list: readonly Promo[] = PROMOS): { promo: Promo } | { problem: PromoProblem } {
+  const promo = list.find((item) => item.code === normalizePromoCode(code) && item.active !== false);
   if (!promo) return { problem: "unknown" };
+  if (context.today && promo.validFrom && context.today < promo.validFrom) return { problem: "notYet" };
+  if (context.today && promo.validTo && context.today > promo.validTo) return { problem: "expired" };
+  if (promo.maxUses && (context.uses ?? 0) >= promo.maxUses) return { problem: "exhausted" };
+  if (promo.perClient && (context.clientUses ?? 0) >= promo.perClient) return { problem: "usedByClient" };
   if (promo.firstVisitOnly && !context.isNewClient) return { problem: "firstVisitOnly" };
   if (promo.minAppointments && context.appointments < promo.minAppointments) return { problem: "minAppointments" };
+  if (promo.serviceIds?.length && context.serviceIds && !context.serviceIds.some((id) => promo.serviceIds?.includes(id))) return { problem: "services" };
   return { promo };
 }
 
@@ -104,6 +131,8 @@ export interface TotalsInput {
   products: number;
   discount: number;
   taxPercent: number;
+  /** El precio ya trae el impuesto (lo normal con IVA): se informa, no se suma. */
+  taxInclusive?: boolean;
   tip: number;
   /** El recargo por tarjeta, solo si se paga con tarjeta o billetera. */
   cardFee?: CardFeeRule | null;
@@ -121,6 +150,8 @@ export interface Totals {
   discount: number;
   subtotal: number;
   tax: number;
+  /** El impuesto va dentro del subtotal: se muestra como «incluido» y no se suma. */
+  taxIncluded?: boolean;
   tip: number;
   fee: number;
   feeName: string | null;
@@ -149,18 +180,20 @@ export function computeTotals(input: TotalsInput): Totals {
   const prepaid = round2(Math.min(Math.max(0, input.prepaid ?? 0), servicesLeft));
   const reward = round2(Math.min(Math.max(0, input.reward ?? 0), servicesLeft - prepaid));
   const subtotal = round2(Math.max(0, input.services + input.products - input.discount - reward - prepaid));
-  const tax = round2((subtotal * input.taxPercent) / 100);
+  const taxIncluded = input.taxInclusive === true;
+  const tax = taxOn(subtotal, input.taxPercent, taxIncluded);
+  const charged = taxIncluded ? subtotal : subtotal + tax;
   const tip = round2(Math.max(0, input.tip));
-  const gift = round2(Math.min(Math.max(0, input.giftBalance ?? 0), subtotal + tax + tip));
+  const gift = round2(Math.min(Math.max(0, input.giftBalance ?? 0), charged + tip));
   const feeBase = Math.max(0, subtotal - gift);
   const rule = input.cardFee ?? null;
   const fee = rule && feeBase > 0 ? round2(rule.type === "percent" ? (feeBase * rule.rate) / 100 : rule.rate) : 0;
-  return { services: round2(input.services), products: round2(input.products), discount: round2(input.discount), subtotal, tax, tip, fee, feeName: fee > 0 && rule ? rule.name : null, gift, reward, prepaid, total: round2(subtotal + tax + tip + fee - gift) };
+  return { services: round2(input.services), products: round2(input.products), discount: round2(input.discount), subtotal, tax, ...(taxIncluded ? { taxIncluded } : {}), tip, fee, feeName: fee > 0 && rule ? rule.name : null, gift, reward, prepaid, total: round2(charged + tip + fee - gift) };
 }
 
 /** El anticipo para pagar en la barbería: el porcentaje de lo comprado con impuesto (sin propina ni recargo). */
-export const depositOf = (totals: Pick<Totals, "subtotal" | "tax"> & { total?: number }, percent: number): number => {
-  const amount = round2(((totals.subtotal + totals.tax) * percent) / 100);
+export const depositOf = (totals: Pick<Totals, "subtotal" | "tax"> & { taxIncluded?: boolean; total?: number }, percent: number): number => {
+  const amount = round2(((totals.subtotal + (totals.taxIncluded ? 0 : totals.tax)) * percent) / 100);
   // Con tarjeta de regalo puede quedar menos por pagar que el anticipo.
   return totals.total === undefined ? amount : Math.min(amount, totals.total);
 };

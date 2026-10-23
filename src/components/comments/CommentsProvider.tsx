@@ -144,6 +144,7 @@ export function CommentsProvider({
         y: at.y,
         context: at.context,
         contextLabel: at.context === context ? contextLabel : undefined,
+        location: at.location,
         resolved: false,
         unread: false,
         messages: [{ id: newId("msg"), author: currentUser, body, createdAt: new Date().toISOString() }],

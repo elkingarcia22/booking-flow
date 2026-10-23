@@ -13,6 +13,8 @@ const METHOD_LABEL: Record<PayMethod, { label: AppMessageKey; icon: IconName }> 
   shop: { label: "booking.payment.shop", icon: "building" },
   credit: { label: "booking.payment.credit", icon: "ticket" },
   gift: { label: "booking.gift.line", icon: "ticket" },
+  pse: { label: "booking.payment.pse", icon: "building" },
+  nequi: { label: "booking.payment.nequi", icon: "phone" },
 };
 
 /** En el cierre, los productos que se lleva: junto a la cita, en la parte de arriba del panel. */

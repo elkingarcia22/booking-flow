@@ -59,9 +59,9 @@ export interface BookingState {
   token: string | null;
   customer: BookingCustomer | null;
   /**
-   * Confirmó con el código que el celular es suyo. El cliente de siempre se reconoce solo con el
-   * número (`customerPreview`): ve su bienvenida, pero pagar, la lista de espera, «Mis citas», los
-   * paquetes y las tarjetas de regalo piden el código.
+   * Confirmó con el código que el celular es suyo. Con solo el número (`customerPreview`, o el nuevo
+   * que deja su ficha) reserva, paga y se apunta a la lista de espera; el código se pide solo para
+   * entrar a «Mis citas» y para pagar con una tarjeta que ya tenía guardada.
    */
   verified: boolean;
   /**
@@ -122,10 +122,15 @@ export interface PendingProfile {
 export type BookingAction =
   | { type: "phoneEntered"; phone: string }
   /**
-   * El celular de un cliente nuevo, sin código: «Conozcámonos» y a armar la cita; el código se pide al
-   * pagar (`PaymentStep`), en la lista de espera o en «Mis citas».
+   * El celular de un cliente nuevo, sin código: «Conozcámonos» y a armar la cita. `token` es la sesión
+   * sin código que solo sirve para crear su ficha (al pagar o al apuntarse a la lista de espera).
    */
-  | { type: "startWithPhone"; phone: string; askProfile: boolean; onlyBranchId: string | null }
+  | { type: "startWithPhone"; phone: string; token: string | null; askProfile: boolean; onlyBranchId: string | null }
+  /**
+   * Quién es, sabido por su celular sin código y sin moverse de pantalla (en el pago o en la lista de
+   * espera): el de siempre con su vista previa, o el nuevo con la sesión para crear su ficha.
+   */
+  | { type: "identified"; phone: string; customer: BookingCustomer | null; token: string }
   /** El cliente de siempre, reconocido por su celular sin código: su bienvenida, con una sesión de vista previa. */
   | { type: "customerPreview"; phone: string; customer: BookingCustomer; token: string }
   /** «Conozcámonos» sin código: se guardan sus datos y sigue a armar la cita. */
@@ -326,6 +331,12 @@ function joinVisit(state: BookingState, visitId: string): BookingState {
   return { ...state, items, draft, editingIndex: items.indexOf(first), fromReview: true, undoItems: state.items, step: "time" };
 }
 
+/**
+ * Lo que solo se paga con tarjeta (paquetes, tarjetas de regalo): falta saber quién es o, si tiene
+ * tarjetas guardadas, confirmar con el código antes de verlas; sin guardadas, sigue sin código.
+ */
+export const needsCardBuyer = (state: Pick<BookingState, "customer" | "verified">): boolean => !state.customer || (!state.verified && state.customer.hasSavedCards);
+
 export function bookingReducer(state: BookingState, action: BookingAction): BookingState {
   switch (action.type) {
     case "phoneEntered":
@@ -334,8 +345,10 @@ export function bookingReducer(state: BookingState, action: BookingAction): Book
       // En Paso a paso el nuevo empieza por «Conozcámonos» (sin código); en la Agenda va directo a la cita
       // y sus datos se piden con el código.
       return action.askProfile
-        ? { ...state, phone: action.phone, codeSentTo: null, token: null, customer: null, verified: false, pendingProfile: null, step: "profile" }
-        : afterIdentity({ ...state, phone: action.phone, codeSentTo: null, token: null, customer: null, verified: false, pendingProfile: null }, action.onlyBranchId);
+        ? { ...state, phone: action.phone, codeSentTo: null, token: action.token, customer: null, verified: false, pendingProfile: null, step: "profile" }
+        : afterIdentity({ ...state, phone: action.phone, codeSentTo: null, token: action.token, customer: null, verified: false, pendingProfile: null }, action.onlyBranchId);
+    case "identified":
+      return { ...state, phone: action.phone, customer: action.customer, token: action.token, verified: false, codeSentTo: null };
     case "profileDrafted":
       return afterIdentity({ ...state, pendingProfile: action.profile }, action.onlyBranchId);
     case "customerPreview":

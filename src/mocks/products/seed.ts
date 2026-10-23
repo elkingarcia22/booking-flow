@@ -28,6 +28,8 @@ export interface MockCatalogProduct {
   cost: number | null;
   /** Porcentaje (0–100) o `null` si no lleva impuesto. */
   taxRate: number | null;
+  /** El precio en cada sucursal que no usa el general (id de sucursal → precio). */
+  branchPrices?: Record<string, number>;
   sku: string | null;
   brand: string | null;
   distributor: string | null;

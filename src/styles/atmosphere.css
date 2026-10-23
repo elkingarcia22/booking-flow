@@ -118,27 +118,6 @@
   background-image: linear-gradient(90deg, hsl(var(--primary) / 0.5), hsl(var(--border) / 0.5) 35%, transparent);
 }
 
-/* Barrido de luz sobre un botón sólido al pasar el puntero. */
-.btn-sweep {
-  position: relative;
-  overflow: hidden;
-}
-.btn-sweep::after {
-  content: "";
-  position: absolute;
-  top: -40%;
-  bottom: -40%;
-  left: -30%;
-  width: 36%;
-  background: linear-gradient(100deg, transparent, hsl(0 0% 100% / 0.55), transparent);
-  transform: translateX(-160%) skewX(-16deg);
-  transition: transform 0.9s var(--ease-out-expo);
-  pointer-events: none;
-}
-.btn-sweep:hover::after {
-  transform: translateX(460%) skewX(-16deg);
-}
-
 /* ── Aparición ────────────────────────────────────────────────────────── */
 
 /* Al entrar en pantalla: solo transform y opacidad; `useReveal` añade
@@ -432,8 +411,7 @@
     transform: scaleY(1);
     transition: none;
   }
-  .tilt,
-  .btn-sweep::after {
+  .tilt {
     transition: none;
   }
 }

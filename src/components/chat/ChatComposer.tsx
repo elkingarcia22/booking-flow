@@ -315,7 +315,7 @@ export function ChatComposer({
                   disabled={!canSend}
                   aria-label={t("chat.send")}
                   data-testid="chat-send"
-                  className="relative flex size-9 items-center justify-center rounded-full bg-ai-gradient text-text-inverse transition-all hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40"
+                  className="relative flex size-9 items-center justify-center rounded-full bg-ai-gradient text-text-inverse transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40"
                 >
                   <ThemaIcon className="text-current" name="send" size="sm" decorative />
                 </button>

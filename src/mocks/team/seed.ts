@@ -16,11 +16,24 @@ export type MockTeamStatus = "active" | "invited" | "inactive";
 export interface MockWorkingRange {
   start: string;
   end: string;
+  /** Turno partido: los descansos del día dentro de la franja (el almuerzo). */
+  breaks?: { start: string; end: string }[];
+}
+
+/** Lo que hace falta en los últimos 90 días (y de antigüedad) para llegar a un nivel; `null` = no se mide. */
+export interface MockLevelCriteria {
+  services90: number | null;
+  rebookRate: number | null;
+  rating: number | null;
+  months: number | null;
 }
 
 export interface MockLevel {
   id: string;
   name: string;
+  /** Cuánto sobre el precio de la carta cobra quien está en este nivel (1 = el precio de la carta). */
+  priceFactor?: number;
+  criteria?: MockLevelCriteria;
 }
 
 export interface MockServiceOverride {
@@ -105,6 +118,35 @@ export interface MockTeamMember {
   permissions: MockPermissions;
   options: MockMemberOptions;
   createdAt: string;
+  /** La última vez que se le mandó (o recordó) la invitación; con ella no se le insiste dos veces el mismo día. */
+  lastInviteAt?: string;
+  /** Cuándo se desactivó: deja de salir en la agenda y en la reserva, pero su historia queda. */
+  deactivatedAt?: string;
+}
+
+/**
+ * Una ausencia: vacaciones, incapacidad, un permiso. Quien va por comisión o salario la pide y el
+ * dueño o el administrador la aprueba; el barbero de renta la registra sin aprobación (ROLES_PLAN #4).
+ * Aprobada, se vuelve un bloqueo en el calendario.
+ */
+export interface MockAbsence {
+  id: string;
+  memberId: string;
+  branchId: string;
+  kind: "vacation" | "sick" | "personal";
+  /** AAAA-MM-DD, ambos incluidos. */
+  startDate: string;
+  endDate: string;
+  note: string;
+  status: "pending" | "approved" | "rejected";
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  /** Por qué se rechazó. */
+  reason: string | null;
+  /** El bloqueo que creó al aprobarse. */
+  blockId: string | null;
 }
 
 export interface MockLineupEntry {
@@ -214,11 +256,16 @@ export const ROLE_PERMISSION_DEFAULTS: Readonly<Record<MockTeamRole, MockPermiss
 
 /* -------------------------------------------------------------- niveles */
 
+/** Turno partido: el mismo descanso todos los días que trabaja (el almuerzo). */
+const withBreak = (schedule: Record<string, MockWorkingRange | null>, pause: { start: string; end: string }): Record<string, MockWorkingRange | null> =>
+  Object.fromEntries(Object.entries(schedule).map(([day, range]) => [day, range ? { ...range, breaks: [pause] } : null]));
+
+/** Los niveles, del primero al último: el orden es el camino de ascenso. */
 export const LEVELS: readonly MockLevel[] = [
-  { id: "lvl_aprendiz", name: "Aprendiz" },
-  { id: "lvl_junior", name: "Junior" },
-  { id: "lvl_senior", name: "Senior" },
-  { id: "lvl_master", name: "Master" },
+  { id: "lvl_aprendiz", name: "Aprendiz", priceFactor: 0.8, criteria: { services90: null, rebookRate: null, rating: null, months: null } },
+  { id: "lvl_junior", name: "Junior", priceFactor: 0.9, criteria: { services90: 60, rebookRate: null, rating: 4.3, months: 3 } },
+  { id: "lvl_senior", name: "Senior", priceFactor: 1, criteria: { services90: 150, rebookRate: 40, rating: 4.5, months: 12 } },
+  { id: "lvl_master", name: "Master", priceFactor: 1.25, criteria: { services90: 250, rebookRate: 55, rating: 4.7, months: 24 } },
 ];
 
 /* ------------------------------------------------------------- personas */
@@ -236,7 +283,7 @@ const DEFAULT_OPTIONS: MockMemberOptions = {
 
 const DEFAULT_COMMISSION: MockCompensation = { type: "commission", basic: 40, recurring: 45, walkIn: 35, noPreference: 35, newClient: 50, productPercent: 10, salary: null, scale: [] };
 
-const DEFAULT_PAYMENTS: MockPayments = { rentBase: 320, walkInDeduction: 20, newClientDeduction: 20, noPreferenceDeduction: 15, bankName: "Bank of America", accountNumber: "**** 4471" };
+const DEFAULT_PAYMENTS: MockPayments = { rentBase: 320, walkInDeduction: 20, newClientDeduction: 20, noPreferenceDeduction: 15, bankName: "Bank of America", accountNumber: "000123454471" };
 
 type Days = readonly number[];
 const MON_SAT: Days = [1, 2, 3, 4, 5, 6];
@@ -316,7 +363,7 @@ export function seedTeam(): MockTeamMember[] {
     person(4, "Andrés", "Beltrán", "barbero-comision", "ma", { levelId: "lvl_master", schedule: week(MON_SAT, "09:00", "19:00"), description: "Especialista en corte clásico y barba a navaja.", instagram: "https://instagram.com/andres.barber", facebook: "https://facebook.com/andres.barber", skills: ["Corte clásico", "Barba a navaja", "Fade"], compensation: { basic: 45, recurring: 50 } }),
     person(29, "Emilio", "Arango", "barbero-comision", "ma", { levelId: "lvl_junior", schedule: week(MON_SAT, "10:00", "19:00"), skills: ["Corte clásico", "Fade", "Corte niño"] }),
     person(30, "Paola", "Zuluaga", "barbero-renta", "ma", { levelId: "lvl_senior", schedule: week(TUE_SAT, "09:00", "17:00"), instagram: "https://instagram.com/paola.cuts", skills: ["Barba a navaja", "Barba", "Diseño", "Corte clásico"] }),
-    person(5, "Nicolás", "Duarte", "barbero-comision", "ma", { levelId: "lvl_senior", schedule: week(TUE_SAT, "10:00", "20:00"), skills: ["Fade", "Diseño", "Barba"] }),
+    person(5, "Nicolás", "Duarte", "barbero-comision", "ma", { levelId: "lvl_senior", schedule: withBreak(week(TUE_SAT, "10:00", "20:00"), { start: "14:00", end: "15:00" }), skills: ["Fade", "Diseño", "Barba"] }),
     person(6, "Valeria", "Marín", "barbero-renta", "ma", { levelId: "lvl_master", schedule: week(MON_FRI, "08:00", "16:00"), bookingVisible: true, options: { newClients: false }, skills: ["Corte clásico", "Barba a navaja", "Tratamientos"] }),
     person(7, "Tomás", "Peña", "barbero-renta", "ma", { levelId: "lvl_junior", schedule: week(WED_SAT, "12:00", "22:00"), skills: ["Fade", "Corte clásico", "Corte niño"] }),
     person(8, "Daniela", "Osorio", "barbero-comision", "ma", { levelId: "lvl_senior", schedule: week(MON_SAT, "09:00", "18:00", { "3": { start: "09:00", end: "13:00" } }), skills: ["Color", "Tratamientos", "Corte clásico"], compensation: { type: "salary", salary: 650 } }),
@@ -371,6 +418,21 @@ export function seedOrders(members: readonly MockTeamMember[]): MockBranchOrder[
       noPreference: ids.map((memberId, index) => ({ memberId, enabled: index % 4 !== 3 })),
     };
   });
+}
+
+/** Las plantillas de partida de cada sede: lo que más se repite en una barbería. */
+export function seedTemplates(): import("./scheduleModel").MockScheduleTemplate[] {
+  const week = (range: MockWorkingRange | null, saturday: MockWorkingRange | null, sunday: MockWorkingRange | null = null) => ({ "0": sunday, "1": range, "2": range, "3": range, "4": range, "5": range, "6": saturday });
+  const morning = { start: "08:00", end: "14:00" };
+  const afternoon = { start: "13:00", end: "20:00" };
+  const split = { start: "09:00", end: "19:00", breaks: [{ start: "13:00", end: "14:00" }] };
+  return ["ma", "mb"].flatMap((branchId) => [
+    { id: `tpl_${branchId}_morning`, branchId, name: "Mañana", cycleWeeks: 1, weeks: [week(morning, morning)] },
+    { id: `tpl_${branchId}_afternoon`, branchId, name: "Tarde", cycleWeeks: 1, weeks: [week(afternoon, afternoon)] },
+    { id: `tpl_${branchId}_split`, branchId, name: "Turno partido", cycleWeeks: 1, weeks: [week(split, { start: "09:00", end: "15:00" })] },
+    // Rotación de dos semanas: una de mañana con sábado y otra de tarde con el sábado libre.
+    { id: `tpl_${branchId}_rotation`, branchId, name: "Rotación mañana / tarde", cycleWeeks: 2, weeks: [week(morning, morning), week(afternoon, null)] },
+  ]);
 }
 
 /** Una semana con dos excepciones para que se vean. */

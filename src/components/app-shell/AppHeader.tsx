@@ -24,12 +24,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, onSlotRef
   const [notifOpen, setNotifOpen] = React.useState(false);
   const notifOrigin = useLiquidOrigin();
 
-  // Primeras 2 notificaciones marcadas como "nuevas" en los datos de demo
   const t = useT();
   const {
     user,
     news,
     notifications,
+    onMarkAllNotificationsRead,
     onLogout,
     onOpenHelp,
     onOpenProcessHistory,
@@ -71,7 +71,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, onSlotRef
     },
     [onSelectRole]
   );
-  const unreadCount = Math.min(2, notifications.length);
+  // Con avisos reales (con id) cuenta los no leídos; con los de demo, las dos primeras son «nuevas».
+  const real = notifications.some((item) => item.id !== undefined);
+  const isUnread = (item: (typeof notifications)[number], index: number) => (real ? item.unread === true : index < 2);
+  const unreadCount = real ? notifications.filter((item) => item.unread).length : Math.min(2, notifications.length);
 
   // The strip reads as surface behind the actions on the right and dissolves
   // to nothing towards the sidebar, where the theme's atmosphere takes over.
@@ -150,8 +153,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, onSlotRef
                   "relative flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-surface text-text-muted transition-colors hover:bg-surface-muted hover:text-text-primary",
                   notifOpen && "bg-surface-muted text-text-primary"
                 )}
-                title="Notificaciones"
+                title={t("shell.notifications")}
                 aria-label={t("shell.notifications")}
+                aria-description={unreadCount > 0 ? t("shell.notificationsUnread", { count: unreadCount }) : undefined}
               >
                 <Bell className="h-4 w-4" strokeWidth={2} />
                 {unreadCount > 0 && (
@@ -169,38 +173,43 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, onSlotRef
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                <span className="text-[13px] font-bold text-text-primary">Notificaciones</span>
+                <span className="text-[13px] font-bold text-text-primary">{t("shell.notifications")}</span>
                 {unreadCount > 0 && (
                   <span className="inline-flex h-5 items-center rounded-full bg-primary px-2 text-[11px] font-bold text-primary-foreground">
-                    {unreadCount} nuevas
+                    {t("shell.notificationsNew", { count: unreadCount })}
                   </span>
                 )}
               </div>
 
               {/* Lista con stagger */}
               <div className="flex flex-col gap-0.5 overflow-y-auto p-2" style={{ maxHeight: "380px" }}>
+                {notifications.length === 0 && <p className="px-3 py-6 text-center text-xs text-text-muted">{t("shell.notificationsEmpty")}</p>}
                 {notifications.map((notification, index) => (
-                  <button
-                    key={notification.title}
-                    className={cn(
-                      "w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-background",
-                      "opacity-0 translate-y-2",
-                      notifOpen && "opacity-100 translate-y-0"
-                    )}
+                  <div
+                    key={notification.id ?? notification.title}
+                    className={cn("rounded-xl transition-colors hover:bg-background", "opacity-0 translate-y-2", notifOpen && "opacity-100 translate-y-0")}
                     style={{
                       transition: notifOpen
                         ? `opacity 280ms cubic-bezier(0.16,1,0.3,1) ${index * 45}ms, transform 280ms cubic-bezier(0.16,1,0.3,1) ${index * 45}ms`
                         : "none",
                     }}
                   >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      notification.onSelect?.();
+                      if (notification.onSelect) setNotifOpen(false);
+                    }}
+                    className="w-full rounded-xl px-3 py-2.5 text-left"
+                  >
                     <div className="flex items-start gap-2.5">
-                      {index < unreadCount && (
+                      {isUnread(notification, index) && (
                         <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                       )}
-                      <div className={cn("min-w-0 flex-1", index >= unreadCount && "pl-[14px]")}>
+                      <div className={cn("min-w-0 flex-1", !isUnread(notification, index) && "pl-[14px]")}>
                         <div className={cn(
                           "text-[13px] text-text-primary",
-                          index < unreadCount ? "font-bold" : "font-semibold"
+                          isUnread(notification, index) ? "font-bold" : "font-semibold"
                         )}>
                           {notification.title}
                         </div>
@@ -209,15 +218,37 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onToggleSidebar, onSlotRef
                       </div>
                     </div>
                   </button>
+                  {/* Lo que se hace sin abrir nada (llamar, reintentar): botones aparte, no dentro del aviso. */}
+                  {notification.actions && notification.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 pl-[26px]" data-testid="notification-actions">
+                      {notification.actions.map((action) => (
+                        <button
+                          key={action.id}
+                          type="button"
+                          onClick={() => {
+                            action.onSelect();
+                            setNotifOpen(false);
+                          }}
+                          className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-primary transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                          data-testid={`notification-action-${action.id}`}
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  </div>
                 ))}
               </div>
 
               {/* Footer */}
-              <div className="border-t border-border/60 px-4 py-2.5">
-                <button className="text-[12px] font-semibold text-primary transition-colors hover:text-primary/80">
-                  Ver todas las notificaciones
-                </button>
-              </div>
+              {onMarkAllNotificationsRead && unreadCount > 0 && (
+                <div className="border-t border-border/60 px-4 py-2.5">
+                  <button type="button" onClick={onMarkAllNotificationsRead} className="text-[12px] font-semibold text-primary transition-colors hover:text-primary/80" data-testid="notifications-read-all">
+                    {t("shell.notificationsReadAll")}
+                  </button>
+                </div>
+              )}
             </PopoverContent>
           </Popover>
         )}

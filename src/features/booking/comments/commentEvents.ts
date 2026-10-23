@@ -27,8 +27,13 @@ export const commentEventSchema = z.object({
   body: z.string().max(MAX_COMMENT_BODY).optional(),
   x: z.number().min(0).max(100).optional(),
   y: z.number().min(0).max(100).optional(),
-  context: z.string().max(120).optional(),
+  context: z.string().max(200).optional(),
   contextLabel: z.string().max(160).optional(),
+  /** Dónde se dejó el comentario (solo en «create»): ruta, módulo, sección y elemento. */
+  route: z.string().max(300).optional(),
+  module: z.string().max(200).optional(),
+  section: z.string().max(300).optional(),
+  element: z.string().max(200).optional(),
 });
 export type CommentEvent = z.infer<typeof commentEventSchema>;
 
@@ -52,6 +57,7 @@ export function reduceEvents(events: readonly CommentEvent[]): CommentThread[] {
           y: event.y ?? 0,
           context: event.context,
           contextLabel: event.contextLabel,
+          location: event.route || event.module || event.section || event.element ? { route: event.route, module: event.module, section: event.section, element: event.element } : undefined,
           resolved: false,
           unread: false,
           messages: [{ id: event.messageId ?? event.id, author, body: event.body ?? "", createdAt: event.at }],
@@ -88,6 +94,14 @@ export function newEventId(): string {
   return `${Date.now().toString(36)}-${eventSequence}-${random.slice(0, 8)}`;
 }
 
+/** La ubicación del hilo como campos del evento, recortada a lo que acepta el registro. */
+function locationFields(thread: CommentThread): Pick<CommentEvent, "route" | "module" | "section" | "element"> {
+  const cut = (value: string | undefined, max: number) => (value ? value.slice(0, max) : undefined);
+  const location = thread.location;
+  if (!location) return {};
+  return { route: cut(location.route, 300), module: cut(location.module, 200), section: cut(location.section, 300), element: cut(location.element, 200) };
+}
+
 /** Las acciones que hay entre dos estados de los hilos: lo que se mandó a guardar con un cambio. */
 export function diffThreads(previous: readonly CommentThread[], next: readonly CommentThread[], actor: CommentActor, at = new Date().toISOString()): CommentEvent[] {
   const events: CommentEvent[] = [];
@@ -99,7 +113,7 @@ export function diffThreads(previous: readonly CommentThread[], next: readonly C
     if (!old) {
       const [first, ...rest] = thread.messages;
       if (first) {
-        events.push({ ...base, id: newEventId(), action: "create", threadId: thread.id, messageId: first.id, authorId: first.author.id, authorName: first.author.name, at: first.createdAt, body: first.body, x: thread.x, y: thread.y, context: thread.context, contextLabel: thread.contextLabel });
+        events.push({ ...base, id: newEventId(), action: "create", threadId: thread.id, messageId: first.id, authorId: first.author.id, authorName: first.author.name, at: first.createdAt, body: first.body, x: thread.x, y: thread.y, context: thread.context, contextLabel: thread.contextLabel, ...locationFields(thread) });
       }
       for (const message of rest) {
         events.push({ ...base, id: newEventId(), action: "reply", threadId: thread.id, messageId: message.id, authorId: message.author.id, authorName: message.author.name, at: message.createdAt, body: message.body });
@@ -117,4 +131,28 @@ export function diffThreads(previous: readonly CommentThread[], next: readonly C
     if (!after.has(thread.id)) events.push({ ...base, id: newEventId(), action: "delete", threadId: thread.id });
   }
   return events;
+}
+
+export interface FreshThreads {
+  /** Los hilos que pasan a no leídos. */
+  fresh: string[];
+  /** Cuántos mensajes tiene cada hilo ahora: la referencia para la próxima vez. */
+  known: Map<string, number>;
+}
+
+/**
+ * Qué hilos quedan como no leídos al llegar comentarios: los nuevos o con más mensajes que la vez
+ * anterior cuyo último mensaje es de otra persona. Lo propio nunca queda sin leer. Mientras no
+ * haya llegado nada del servidor (`loaded` falso) solo se anota cuántos mensajes tiene cada hilo.
+ */
+export function freshThreadIds(threads: readonly CommentThread[], known: ReadonlyMap<string, number>, authorId: string, loaded: boolean): FreshThreads {
+  const next = new Map(known);
+  const fresh: string[] = [];
+  for (const thread of threads) {
+    const before = known.get(thread.id);
+    const last = thread.messages[thread.messages.length - 1];
+    if (loaded && last && last.author.id !== authorId && (before === undefined || thread.messages.length > before)) fresh.push(thread.id);
+    next.set(thread.id, thread.messages.length);
+  }
+  return { fresh, known: next };
 }

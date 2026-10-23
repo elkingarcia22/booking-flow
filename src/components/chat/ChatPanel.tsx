@@ -74,6 +74,8 @@ export function ChatPanel({ open, onOpenChange, title, subtitle, onMore }: ChatP
   }, [open, close]);
 
   const composerProps = {
+    // Adjuntar se apaga mientras quien responde no lea archivos: ofrecerlo y descartarlos engaña.
+    attach: false,
     value: draft,
     onChange: setDraft,
     onSend: (text: string) => actions.send(text),
@@ -86,20 +88,34 @@ export function ChatPanel({ open, onOpenChange, title, subtitle, onMore }: ChatP
 
   return (
     <ShellAgentPanelSlot>
-      {/* El envoltorio es lo que se anima: al crecer estrecha la columna de
-          contenido y recorta el panel de ancho fijo mientras se abre. */}
+      {/* En escritorio el envoltorio es lo que se anima: al crecer estrecha la
+          columna de contenido y recorta el panel de ancho fijo mientras se abre.
+          En el celular no hay sitio para empujar nada: el panel es una hoja a
+          pantalla completa que sube por encima del contenido. Los anchos van en
+          variables para que las clases del celular puedan ganarles. */}
       <div
-        className="h-full shrink-0 overflow-hidden"
+        className={cn(
+          "h-full w-[var(--agent-panel-w)] shrink-0 overflow-hidden md:[transition:var(--agent-panel-transition)]",
+          "max-md:fixed max-md:inset-0 max-md:z-[60] max-md:h-dvh max-md:w-full max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:max-md:transition-none",
+          open ? "max-md:translate-y-0" : "max-md:pointer-events-none max-md:invisible max-md:translate-y-full"
+        )}
         data-agent-panel-open={open || undefined}
-        style={{ width: open ? AGENT_PANEL_OUTER_WIDTH : 0, transition: agentPanelTransition("width") }}
+        style={{ "--agent-panel-w": open ? AGENT_PANEL_OUTER_WIDTH : "0px", "--agent-panel-transition": agentPanelTransition("width") } as React.CSSProperties}
       >
-        <div className="h-full" style={{ width: AGENT_PANEL_OUTER_WIDTH, padding: `${OVERLAY_INSET}px ${OVERLAY_INSET}px ${OVERLAY_INSET}px 0` }}>
+        <div
+          className="h-full w-[var(--agent-panel-outer)] pb-[var(--agent-panel-inset)] pr-[var(--agent-panel-inset)] pt-[var(--agent-panel-inset)] max-md:w-full max-md:p-0"
+          style={{ "--agent-panel-outer": AGENT_PANEL_OUTER_WIDTH, "--agent-panel-inset": `${OVERLAY_INSET}px` } as React.CSSProperties}
+        >
           <aside
             aria-label={title ?? t("chat.title")}
             aria-hidden={!open}
             data-testid="chat-panel"
-            className={cn("flex h-full flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface ai-mesh-agent shadow-card", !open && "invisible")}
-            style={{ width: AGENT_PANEL_WIDTH }}
+            className={cn(
+              "flex h-full w-[var(--agent-panel-inner)] flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface ai-mesh-agent shadow-card",
+              "max-md:w-full max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)]",
+              !open && "invisible"
+            )}
+            style={{ "--agent-panel-inner": AGENT_PANEL_WIDTH } as React.CSSProperties}
           >
             <header className="flex shrink-0 items-center gap-3 border-b border-border/20 px-4 py-3">
               <ChatMark size="md" motion={hasThread ? "still" : "breathing"} />
@@ -175,7 +191,7 @@ export function ChatPanel({ open, onOpenChange, title, subtitle, onMore }: ChatP
                         key={suggestion}
                         type="button"
                         onClick={() => actions.send(suggestion)}
-                        className="rounded-2xl border border-border/70 bg-surface p-3 text-left text-xs font-medium leading-snug text-text-secondary transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-text-primary hover:shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        className="rounded-2xl border border-border/70 bg-surface p-3 text-left text-xs font-medium leading-snug text-text-secondary transition-colors hover:border-primary/40 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
                         {suggestion}
                       </button>

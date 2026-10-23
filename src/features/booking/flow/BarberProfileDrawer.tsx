@@ -75,13 +75,20 @@ export function BarberProfileBody({ barber, serviceIds }: { barber: BookingBarbe
         <section className="flex flex-col gap-1.5">
           <Heading level={6}>{t("booking.barber.about", { name: barber.name.split(" ")[0] ?? barber.name })}</Heading>
           <Text tone="secondary">{barber.description}</Text>
-          {/* Solo la calificación: sin la lista de reseñas ni cuántas son. */}
-          <div className="flex items-center gap-2">
-            <Text size="lg" weight="semibold" tabular>
-              {barber.rating.toFixed(1)}
-            </Text>
-            <Rating value={Math.round(barber.rating * 2) / 2} allowHalf readOnly size="sm" aria-label={`${barber.rating.toFixed(1)} / 5`} />
-          </div>
+          {/* Solo la calificación: sin la lista de reseñas ni cuántas son. Sin reseñas, nada; las de ejemplo, dicho. */}
+          {barber.reviews > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Text size="lg" weight="semibold" tabular>
+                {barber.rating.toFixed(1)}
+              </Text>
+              <Rating value={Math.round(barber.rating * 2) / 2} allowHalf readOnly size="sm" aria-label={`${barber.rating.toFixed(1)} / 5`} />
+              {barber.ratingSample && (
+                <Text as="span" size="xs" tone="muted" data-testid="barber-rating-sample">
+                  {t("booking.barber.sampleReviews")}
+                </Text>
+              )}
+            </div>
+          )}
         </section>
         {barber.skills.length > 0 && (
           <section className="flex flex-col gap-2">

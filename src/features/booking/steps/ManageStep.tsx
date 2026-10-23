@@ -16,7 +16,7 @@ import { AppointmentCard } from "../flow/AppointmentCard";
 import { useBookingFlow } from "../flow/BookingContext";
 import { CancelDialog } from "../flow/CancelDialog";
 import { ManageSignIn } from "../flow/ManageSignIn";
-import { PayIdentity } from "../flow/PayIdentity";
+import { CodeGate } from "../flow/PayIdentity";
 import { ReceiptView } from "../flow/ReceiptView";
 import { RescheduleDrawer } from "../flow/RescheduleDrawer";
 import { ReviewSheet } from "../flow/ReviewSheet";
@@ -52,7 +52,7 @@ export function ManageStep() {
     return (
       <StepLayout title={t("booking.manage.title")} lead={t("booking.manage.lead")}>
         {/* Reconocido por su celular: el código va directo a ese número. Si no, el celular y luego el código. */}
-        {state.customer ? <PayIdentity /> : <ManageSignIn />}
+        {state.customer ? <CodeGate /> : <ManageSignIn />}
       </StepLayout>
     );
   }

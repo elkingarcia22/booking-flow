@@ -1,4 +1,5 @@
 import * as React from "react";
+import { isSameDay } from "date-fns";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocale, useT } from "@/i18n";
@@ -121,6 +122,8 @@ const OFF_HOURS_PATTERN = "repeating-linear-gradient(135deg, hsl(var(--foregroun
  * del botón es translúcido en oscuro y dejaba ver el avatar de debajo a través de la flecha.
  */
 const SCROLL_BUTTON = "bg-surface shadow-md dark:border-border-strong dark:bg-surface-muted dark:hover:bg-muted";
+/** Mínimo de una columna cuando cada una es un día (la semana de una persona): 7 × 8rem caben en una pantalla de escritorio. */
+const DAY_COLUMN_MIN = "8rem";
 /** Margen para decidir que el scroll llegó a un borde. */
 const EDGE_TOLERANCE_PX = 4;
 
@@ -166,7 +169,17 @@ export function ResourceDayGrid({
   const nowDate = React.useMemo(() => now ?? new Date(), [now]);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
-  const { preview, bind, wasDragged } = useScheduleDrag({ bodyRef, day: date, dayStart, dayEnd, step, onMove: onEventMove, onResize: onEventResize, validate: validateDrop, onRejected: onDropRejected });
+  // Con una columna por día, soltar en otra columna es cambiar de día: la fecha del destino es la de esa columna.
+  const dayByResource = React.useMemo(() => new Map(resources.flatMap((resource) => (resource.date ? [[resource.id, resource.date] as const] : []))), [resources]);
+  const dropDayOf = React.useCallback((resourceId: string): Date => dayByResource.get(resourceId) ?? date, [dayByResource, date]);
+  const { preview, bind, wasDragged } = useScheduleDrag({ bodyRef, day: date, dayOf: dropDayOf, dayStart, dayEnd, step, onMove: onEventMove, onResize: onEventResize, validate: validateDrop, onRejected: onDropRejected });
+
+  // Cada columna enseña su propio día (la semana de una persona) o el de la rejilla.
+  const dayOf = React.useCallback((resource: ScheduleResource): Date => resource.date ?? date, [date]);
+  const perDay = resources.some((resource) => resource.date !== undefined);
+  const todayColumn = resources.find((resource) => nowPercent(nowDate, dayOf(resource), dayStart, dayEnd) !== null);
+  const showsNow = todayColumn !== undefined;
+  const todayKey = perDay ? resources.find((resource) => resource.date && isSameDay(resource.date, nowDate))?.id : undefined;
 
   // Al abrir un día la rejilla se coloca sola: en «ahora» si es hoy, y si no
   // una hora antes de que alguien empiece a trabajar. Depende del día y de esa
@@ -177,12 +190,13 @@ export function ResourceDayGrid({
   React.useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
-    const day = new Date(dayKey);
     const pxPerMinute = slotHeight / step;
-    const nowPct = nowPercent(nowDate, day, dayStart, dayEnd);
-    const target = nowPct !== null ? minutesOfDay(nowDate) - 60 : (earliest ?? dayStart) - 60;
+    const target = showsNow ? minutesOfDay(nowDate) - 60 : (earliest ?? dayStart) - 60;
     node.scrollTop = Math.max(0, (target - dayStart) * pxPerMinute);
-  }, [dayKey, dayEnd, dayStart, earliest, nowDate, slotHeight, step]);
+    // En la semana de una persona, si no caben todos los días, se empieza por hoy.
+    const todayCell = todayKey ? bodyRef.current?.querySelector<HTMLElement>(`[data-resource-id="${CSS.escape(todayKey)}"]`) : null;
+    if (todayCell) node.scrollLeft = todayCell.offsetLeft;
+  }, [dayKey, dayEnd, dayStart, earliest, nowDate, showsNow, slotHeight, step, todayKey]);
 
   // Con más columnas de las que caben, la rejilla se desplaza a lo ancho: dos
   // botones en la cabecera dicen que hay más barberos a cada lado y saltan a ellos.
@@ -234,14 +248,28 @@ export function ResourceDayGrid({
   // El arrastre de un asa se pinta en vivo sin pasar por quien monta la rejilla: solo el final se guarda.
   const [resizing, setResizing] = React.useState<{ id: string; width: number } | null>(null);
   const widthOf = (id: string): number | undefined => (resizing?.id === id ? resizing.width : columnWidths?.[id]);
-  const tracks = resources.length > 0 ? resources.map((resource) => columnTrack(widthOf(resource.id))).join(" ") : columnTrack(undefined);
+  // Si todas las columnas a la vista tienen ancho fijo (p. ej. un solo barbero ajustado), la última
+  // se estira: si no, la rejilla quedaba pegada a la izquierda con el resto vacío.
+  // Los siete días de una semana caben a lo ancho en escritorio: su columna puede ser más angosta que la de un barbero.
+  const trackOf = (width: number | undefined): string => (width === undefined && perDay ? `minmax(${DAY_COLUMN_MIN}, 1fr)` : columnTrack(width));
+  const allFixed = resources.length > 0 && resources.every((resource) => widthOf(resource.id) !== undefined);
+  const tracks =
+    resources.length > 0
+      ? resources
+          .map((resource, index) => {
+            const width = widthOf(resource.id);
+            return allFixed && index === resources.length - 1 && resizing?.id !== resource.id ? `minmax(${columnTrack(width)}, 1fr)` : trackOf(width);
+          })
+          .join(" ")
+      : columnTrack(undefined);
   const contentWidth = resources.map((resource) => {
     const width = widthOf(resource.id);
-    return width === undefined ? SCHEDULE_COLUMN_DEFAULT : columnTrack(width);
+    if (width === undefined) return perDay ? DAY_COLUMN_MIN : SCHEDULE_COLUMN_DEFAULT;
+    return columnTrack(width);
   });
   const columns = `${GUTTER} ${tracks}`;
   const measureColumn = (id: string): number => bodyRef.current?.querySelector<HTMLElement>(`[data-resource-id="${CSS.escape(id)}"]`)?.getBoundingClientRect().width ?? 0;
-  const marker = nowPercent(nowDate, date, dayStart, dayEnd);
+  const marker = todayColumn ? nowPercent(nowDate, dayOf(todayColumn), dayStart, dayEnd) : null;
 
   const openEvent = (event: ScheduleEvent) => {
     if (wasDragged()) return;
@@ -269,6 +297,7 @@ export function ResourceDayGrid({
             <ResourceHeader
               key={resource.id}
               resource={resource}
+              isToday={resource.date !== undefined && isSameDay(resource.date, nowDate)}
               actions={resourceActions?.(resource)}
               resizeHandle={
                 onColumnResize && (
@@ -289,13 +318,14 @@ export function ResourceDayGrid({
           <div className={cn("sticky left-0 z-raised border-r border-border bg-surface", edges.previous && "shadow-card")} style={{ gridColumn: 1, gridRow: 2 }} aria-hidden="true">
             <div className="relative">
               {slots.map((minute) => (
-                <div key={minute} className="relative border-b border-border/60 pr-2 text-right" style={{ height: slotHeight }}>
-                  <span className="-translate-y-1/2 inline-block text-xs tabular-nums text-text-muted">{formatClock(atMinutes(date, minute), intl)}</span>
+                <div key={minute} className="relative border-b border-border/60 pr-1.5 text-right" style={{ height: slotHeight }}>
+                  {/* En una sola línea: «12:00 p. m.» partido en dos se leía como dos horas. */}
+                  <span className="-translate-y-1/2 inline-block whitespace-nowrap text-xs tabular-nums text-text-muted">{formatClock(atMinutes(date, minute), intl)}</span>
                 </div>
               ))}
               {marker !== null && (
                 <span
-                  className="absolute left-1 inline-flex -translate-y-1/2 items-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-destructive-foreground shadow-card"
+                  className="absolute left-1 inline-flex -translate-y-1/2 items-center whitespace-nowrap rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-destructive-foreground shadow-card"
                   style={{ top: `${marker}%` }}
                 >
                   {formatClock(nowDate, intl)}
@@ -309,15 +339,16 @@ export function ResourceDayGrid({
             {resources.map((resource) => (
               <ResourceColumn
                 key={resource.id}
-                date={date}
+                date={dayOf(resource)}
                 resource={resource}
-                events={eventsForResource(events, date, resource.id)}
+                events={eventsForResource(events, dayOf(resource), resource.id)}
                 slots={slots}
                 slotHeight={slotHeight}
                 step={step}
                 dayStart={dayStart}
                 dayEnd={dayEnd}
-                nowMarker={marker}
+                nowMarker={nowPercent(nowDate, dayOf(resource), dayStart, dayEnd)}
+                drawNowLine={perDay}
                 intl={intl}
                 preview={preview}
                 bind={bind}
@@ -328,7 +359,7 @@ export function ResourceDayGrid({
               />
             ))}
 
-            {marker !== null && (
+            {marker !== null && !perDay && (
               <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 z-raised flex items-center" style={{ top: `${marker}%` }}>
                 <span className="h-0.5 flex-1 bg-destructive" />
               </div>
@@ -342,9 +373,31 @@ export function ResourceDayGrid({
 
 /* ---------------------------------------------------------------- header */
 
-function ResourceHeader({ resource, actions, resizeHandle }: { resource: ScheduleResource; actions?: readonly ScheduleResourceAction[]; resizeHandle?: React.ReactNode }) {
+function DayIdentity({ resource, isToday }: { resource: ScheduleResource & { date: Date }; isToday: boolean }) {
+  const { current } = useLocale();
+  const weekday = new Intl.DateTimeFormat(current.intl, { weekday: "short" }).format(resource.date).replace(".", "");
+  return (
+    <span className="flex min-w-0 flex-col items-center">
+      <span className={cn("text-xs font-semibold uppercase tracking-wide", isToday ? "text-primary" : "text-text-muted")}>{weekday}</span>
+      <span
+        className={cn(
+          "inline-flex size-9 items-center justify-center rounded-full text-xl font-semibold tabular-nums",
+          isToday ? "bg-primary text-primary-foreground" : "text-text-primary"
+        )}
+        aria-current={isToday ? "date" : undefined}
+      >
+        {resource.date.getDate()}
+      </span>
+      {resource.subtitle && <span className="max-w-full truncate text-xs text-text-muted">{resource.subtitle}</span>}
+    </span>
+  );
+}
+
+function ResourceHeader({ resource, isToday = false, actions, resizeHandle }: { resource: ScheduleResource; isToday?: boolean; actions?: readonly ScheduleResourceAction[]; resizeHandle?: React.ReactNode }) {
   const t = useT();
-  const identity = (
+  const identity = resource.date ? (
+    <DayIdentity resource={{ ...resource, date: resource.date }} isToday={isToday} />
+  ) : (
     <>
       <Avatar size="sm">
         {resource.avatarUrl && <AvatarImage src={resource.avatarUrl} alt="" />}
@@ -434,6 +487,8 @@ interface ResourceColumnProps {
   dayEnd: number;
   /** Dónde cae «ahora» en la columna (porcentaje), o `null` si no es hoy. */
   nowMarker: number | null;
+  /** Cada columna es un día: la línea de «ahora» la pinta solo la de hoy, no cruza la rejilla. */
+  drawNowLine?: boolean;
   intl: string;
   preview: DragPreview | null;
   bind: ReturnType<typeof useScheduleDrag>["bind"];
@@ -443,7 +498,7 @@ interface ResourceColumnProps {
   eventActions?: (event: ScheduleEvent) => readonly RowAction[];
 }
 
-function ResourceColumn({ date, resource, events, slots, slotHeight, step, dayStart, dayEnd, nowMarker, intl, preview, bind, canResize, onSlotClick, onOpen, eventActions }: ResourceColumnProps) {
+function ResourceColumn({ date, resource, events, slots, slotHeight, step, dayStart, dayEnd, nowMarker, drawNowLine = false, intl, preview, bind, canResize, onSlotClick, onOpen, eventActions }: ResourceColumnProps) {
   const t = useT();
   const placed = React.useMemo(() => layoutEvents(events, dayStart, dayEnd), [events, dayStart, dayEnd]);
   const total = dayEnd - dayStart;
@@ -477,6 +532,12 @@ function ResourceColumn({ date, resource, events, slots, slotHeight, step, daySt
 
       {/* Lo que ya pasó hoy se atenúa: la vista va a lo que queda por atender. */}
       {nowMarker !== null && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 bg-foreground/[0.035]" style={{ height: `${nowMarker}%` }} />}
+      {nowMarker !== null && drawNowLine && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 z-raised flex items-center" style={{ top: `${nowMarker}%` }}>
+          <span className="-ml-1 size-2.5 shrink-0 rounded-full bg-destructive" />
+          <span className="h-0.5 flex-1 bg-destructive" />
+        </div>
+      )}
 
       {!worksToday && (
         <span className="pointer-events-none absolute inset-x-0 top-2 text-center text-xs text-text-muted">{t("schedule.notWorking")}</span>

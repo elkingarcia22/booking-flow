@@ -131,20 +131,28 @@ export interface EventLayout {
 
 /**
  * Coloca los eventos de una columna: arriba y alto en porcentaje del día
- * visible y, cuando dos se pisan, una subcolumna para cada uno. Los bloqueos
- * no reparten sitio: se pintan detrás, a todo el ancho.
+ * visible y, cuando dos se pisan, una subcolumna para cada uno. Un bloqueo
+ * libre va detrás, a todo el ancho; uno que cae encima de citas (una ausencia
+ * aprobada con citas aún sin mover) toma la mitad izquierda y esas citas la
+ * derecha, para que los textos no se monten. Las propuestas van a todo el
+ * ancho, encima.
  */
 export function layoutEvents(events: readonly ScheduleEvent[], dayStart: number, dayEnd: number): EventLayout[] {
   const total = dayEnd - dayStart;
   if (total <= 0) return [];
   const sorted = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
+  const isCard = (event: ScheduleEvent) => event.kind !== "block" && !event.ghost;
+  const overlaps = (a: ScheduleEvent, b: ScheduleEvent) => a.start.getTime() < b.end.getTime() && b.start.getTime() < a.end.getTime();
+  const cards = sorted.filter(isCard);
+  // Los bloqueos que pisan citas: comparten la columna con ellas en vez de ir detrás.
+  const sharing = sorted.filter((event) => event.kind === "block" && !event.ghost && cards.some((card) => overlaps(card, event)));
 
   const groups: ScheduleEvent[][] = [];
   let current: ScheduleEvent[] = [];
   let groupEnd = Number.NEGATIVE_INFINITY;
   for (const event of sorted) {
-    // Los bloqueos y las propuestas no reparten sitio: van a todo el ancho, detrás o encima.
-    if (event.kind === "block" || event.ghost) {
+    // Los bloqueos y las propuestas no reparten sitio entre citas: van aparte.
+    if (!isCard(event)) {
       groups.push([event]);
       continue;
     }
@@ -165,7 +173,11 @@ export function layoutEvents(events: readonly ScheduleEvent[], dayStart: number,
       const offset = minutesOfDay(event.start) - dayStart;
       const top = (clamp(offset, 0, total) / total) * 100;
       const height = (clamp(eventMinutes(event), 0, total - clamp(offset, 0, total)) / total) * 100;
-      return { event, top, height: Math.max(height, 2), column: index, columns: event.kind === "block" || event.ghost ? 1 : group.length };
+      const place = (column: number, columns: number) => ({ event, top, height: Math.max(height, 2), column, columns });
+      if (event.ghost) return place(0, 1);
+      if (event.kind === "block") return sharing.includes(event) ? place(0, 2) : place(0, 1);
+      // Una cita bajo un bloqueo pasa a la mitad derecha (con sus subcolumnas dentro).
+      return sharing.some((block) => overlaps(block, event)) ? place(group.length + index, group.length * 2) : place(index, group.length);
     })
   );
 }

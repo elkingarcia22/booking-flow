@@ -1,13 +1,13 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppT, type AppMessageKey } from "@/app/i18n";
+import { useLocale } from "@/i18n";
 import { describeError } from "@/lib/api";
 import { splitMultipleAnswer } from "@/lib/chat";
 import { bookingApi } from "../../api";
 import { bookingReducer, defaultBranchId, personName, type BookingAction, type BookingPerson, type BookingState } from "../../bookingState";
 import { dayKeyOf, firstBookableDay, formatPhone, parseStart } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
-import { brandFromName, isCvcComplete } from "../../flow/cardValidation";
 import type { PaymentController } from "../../flow/usePaymentController";
 import type { Totals } from "../../pricing";
 import { bookingKeys } from "../../queries";
@@ -15,7 +15,7 @@ import { itemDuration } from "../../useBookingTotals";
 import { busyRanges, overlapsBusy } from "../../visit";
 import type { Availability, BookedAppointment, BookingBarber, BookingCatalog, Slot, VisitSuggestion } from "../../types";
 import type { DayWindow } from "../agenda/agendaModel";
-import { EMPTY_CARD, isCardStep, maskCardInput, useChatNewCard, type CardDraft } from "./chatCard";
+import { useChatNewCard } from "./chatCard";
 import { useChatCheckout } from "./chatCheckout";
 import { useChatIdentity } from "./chatIdentity";
 import { detectAside, useChatIntents } from "./chatIntents";
@@ -80,6 +80,8 @@ export function useChatBooking({
   const pendingManage = React.useRef(false);
   /** Se pidió la lista de espera (con esta franja) sin el código: al confirmarlo se apunta. */
   const pendingWaitlist = React.useRef<string | null>(null);
+  /** Pidió el código para pagar con una tarjeta guardada: al confirmarlo, a elegir tarjeta. */
+  const pendingCard = React.useRef(false);
   /** Lo que pidió en la portada («corte mañana en la tarde»): se atiende en cuanto se sabe quién es. */
   const pendingIntent = React.useRef<string | null>(null);
   const timesDay = React.useRef<string | null>(null);
@@ -91,7 +93,6 @@ export function useChatBooking({
   const seenCustomer = React.useRef<string | null>(null);
   const seenReservation = React.useRef<string | null>(null);
   /** La tarjeta nueva a medio escribir (un dato por mensaje). */
-  const cardDraft = React.useRef<CardDraft>(EMPTY_CARD);
 
   const apply = React.useCallback(
     (action: BookingAction) => {
@@ -147,9 +148,11 @@ export function useChatBooking({
     say({ text });
   };
 
+  const { locale } = useLocale();
   const identity = useChatIdentity({
     t,
     shop,
+    locale,
     apply,
     say,
     ask,
@@ -159,23 +162,34 @@ export function useChatBooking({
     stateRef,
     profile,
     askPhone,
-    // Con la identidad al final, o si ya va a pagar o a «Mis citas», el celular se confirma con código.
-    needsCode: () => identityLast || pendingCheckout.current || pendingManage.current || pendingWaitlist.current !== null,
+    // Solo «Mis citas» confirma el celular con código; pagar y la lista de espera van sin él.
+    needsCode: () => pendingManage.current,
+    needsProfile: () => pendingCheckout.current || pendingWaitlist.current !== null,
     onPhoneSaved: () => startBooking(),
   });
-  const { submitPhone, sendCode, submitCode, submitProfileText, createProfile } = identity;
+  const { submitPhone, lookupPhone, askProfile, sendCode, submitCode, submitProfileText, createProfile } = identity;
 
   /** Ya se puede armar la cita: sabe quién es, o dio su celular (el código va al pagar), o la identidad va al final. */
   const canBook = () => Boolean(stateRef.current.customer || stateRef.current.token || stateRef.current.phone || identityLast);
 
   /**
-   * Confirmar quién es (para pagar, «Mis citas» o la lista de espera): con el celular ya dado —también
-   * el del cliente reconocido sin código—, el código va directo a él; si no, se le pide el celular.
+   * Saber quién es: para «Mis citas», el código (directo al celular ya dado); para pagar o la lista de
+   * espera, sin código —con el celular ya dado se busca; el nuevo deja su ficha—. Si no, el celular.
    */
   const confirmIdentity = (text?: string) => {
-    const phone = stateRef.current.phone;
-    if (phone && !stateRef.current.verified) return void sendCode(phone);
+    const current = stateRef.current;
+    if (pendingManage.current) return current.phone && !current.verified ? void sendCode(current.phone) : askPhone(text);
+    if (current.token && !current.customer) return askProfile();
+    if (current.phone && !current.customer) return void lookupPhone(current.phone);
     askPhone(text);
+  };
+
+  /** Va a pagar con tarjeta y tiene guardadas: el código para verlas; al confirmarlo, a elegir cuál. */
+  const verifyForCards = () => {
+    const phone = stateRef.current.phone;
+    if (!phone) return askPhone();
+    pendingCard.current = true;
+    void sendCode(phone);
   };
 
   /* ───────────────────────────── la cita ───────────────────────────── */
@@ -236,7 +250,7 @@ export function useChatBooking({
       const from = values.length > 0 ? Math.min(...values) : service.price;
       return { label: service.name, value: service.id, description: t("booking.agenda.whatSummary", { minutes: service.durationMin, price: fmt.money(from) }), ...(service.imageUrl ? { image: service.imageUrl } : {}) };
     });
-    ask(makeQuestion("services", t("booking.chat.servicesTitle"), entries, { hint: t("booking.chat.servicesHint"), searchPlaceholder: t("booking.services.search"), multiple: { confirmLabel: t("booking.services.next") } }), text);
+    ask(makeQuestion("services", t("booking.chat.servicesTitle"), entries, { hint: t("booking.chat.servicesHint"), multiple: { confirmLabel: t("booking.services.next") } }), text);
   };
 
   /** Lo que se está buscando: la cita en borrador o la que se está moviendo. */
@@ -491,13 +505,13 @@ export function useChatBooking({
   const profiles = useChatProfiles({ t, fmt, shop, apply, say, ask, busy, stateRef, catalogRef, loadCatalog, serviceNames, startBooking, askDay, askServices, resume, lastTeam });
   const { askBranch, askBarber, info } = profiles;
   const extras = useChatExtras({ t, fmt, apply, say, ask, expect, stateRef, catalogRef, pushUser, askMore });
-  const pay = useChatCheckout({ t, fmt, shop, queryClient, apply, say, ask, busy, expect, settle: (turnId: string, label: string) => settle(turnId, label), receiptPlan, stateRef, catalogRef, totalsRef, payment, suggestion, managing, rescheduling, pendingManage, serviceNames, barberName, onFinish, askMore, startBooking, askDay, askPhone: confirmIdentity, askServices, askNext, startNewCard: (lead?: string) => newCard.start(lead) });
-  const newCard = useChatNewCard({ t, say, ask, expect, stateRef, payment, cardDraft, askMethod: pay.askMethod });
+  const pay = useChatCheckout({ t, fmt, shop, queryClient, apply, say, ask, busy, expect, settle: (turnId: string, label: string) => settle(turnId, label), receiptPlan, stateRef, catalogRef, totalsRef, payment, suggestion, managing, rescheduling, pendingManage, serviceNames, barberName, onFinish, askMore, startBooking, askDay, askPhone: confirmIdentity, askServices, askNext, startNewCard: (lead?: string) => newCard.start(lead), askSavedCvc: (card) => newCard.askSavedCvc(card), verifyForCards });
+  const newCard = useChatNewCard({ t, say, stateRef, payment, askMethod: pay.askMethod, onCvcReady: () => pay.askConfirm() });
   const { checkout, manage, askMethod, askConfirm } = pay;
 
-  /** Pagar: si aún no se sabe quién es, primero el código (o el celular, si no lo dio) y luego al pago. */
+  /** Pagar: si aún no se sabe quién es, primero su celular (y su ficha si es nuevo), sin código, y luego al pago. */
   const payOrIdentify = () => {
-    if (!stateRef.current.verified || !stateRef.current.customer) {
+    if (!stateRef.current.customer) {
       pendingCheckout.current = true;
       return confirmIdentity(t("booking.chat.phoneToFinish"));
     }
@@ -557,6 +571,11 @@ export function useChatBooking({
     presetBranch();
     // Ya se le saludó al reconocerlo por su celular: ahora solo se confirma el código y se sigue.
     if (again) say({ text: t("booking.chat.codeOk") });
+    // Confirmó el código para usar sus tarjetas guardadas: a elegir cuál.
+    if (pendingCard.current) {
+      pendingCard.current = false;
+      return void pay.askCard();
+    }
     // Confirmó el código para la lista de espera: se apunta con la franja que había elegido.
     if (pendingWaitlist.current) {
       const window = pendingWaitlist.current;
@@ -680,7 +699,6 @@ export function useChatBooking({
     if (question.kind === "barber" && value === "separate") return void separate();
     if (await pay.answerCheckout(question, value, label, isOther)) return;
     if (await profiles.answerProfile(question, value, label, isOther)) return;
-    if (newCard.answerCard(question, value)) return;
     const current = stateRef.current;
     switch (question.kind) {
       case "next":
@@ -737,8 +755,8 @@ export function useChatBooking({
         return askDay();
       case "waitlist":
         if (!value) return;
-        // Apuntarse pide el código: al confirmarlo se apunta solo (`greet`).
-        if (!current.verified) {
+        // Apuntarse pide saber quién es (sin código): al saberlo se apunta solo (`greet`).
+        if (!current.customer) {
           pendingWaitlist.current = value;
           return confirmIdentity(t("booking.chat.waitlistNeedsPhone"));
         }
@@ -852,7 +870,7 @@ export function useChatBooking({
     const waiting = expecting.current;
     // La nota para el barbero con sus fotos (el clip solo aparece mientras se escribe la nota).
     if (waiting === "note") return void extras.submitNote(text, files);
-    const secret = waiting === "code" || waiting === "cvc" || isCardStep(waiting);
+    const secret = waiting === "code";
     // «Perfil de Andrés», «cómo es la sede Centro»: el detalle antes de elegir.
     if (!waiting && looksLikeDetail(text)) {
       pushUser(text);
@@ -882,7 +900,7 @@ export function useChatBooking({
       pushUser(text);
       return answer(open.id, loose, { echo: false, isOther: false });
     }
-    pushUser(isCardStep(waiting) ? maskCardInput(waiting, text) : secret ? "•".repeat(Math.min(6, text.replace(/\s/g, "").length)) : text);
+    pushUser(secret ? "•".repeat(Math.min(6, text.replace(/\s/g, "").length)) : text);
     const quick = parseBookingText(text, { services: [], barbers: [], now: new Date() }).intent;
     if (!secret && quick === "restart") return restart();
     if (!secret && quick === "info") return info();
@@ -898,17 +916,8 @@ export function useChatBooking({
       return askPhone();
     }
     if (waiting === "code") return void submitCode(text);
-    if (isCardStep(waiting)) return newCard.submit(waiting, text);
     if (isReceiptStep(waiting)) return pay.submitReceiptTarget(waiting, text);
     if (waiting === "firstName" || waiting === "lastName" || waiting === "email") return submitProfileText(text);
-    if (waiting === "cvc") {
-      const card = stateRef.current.customer?.cards.find((item) => item.id === payment.current?.cardChoice);
-      const cvc = text.replace(/\D/g, "");
-      if (!card || !isCvcComplete(cvc, brandFromName(card.brand))) return say({ text: t("booking.chat.badCvc") });
-      expect(null);
-      payment.current?.setSavedCvc(cvc);
-      return askConfirm();
-    }
     if (!canBook()) return askPhone(t("booking.chat.needPhone"));
     // «A los dos», «por SMS», un correo o un celular, con la lista del recibo abierta.
     if (open && pay.answerTypedReceipt(open, text)) return;
@@ -984,15 +993,10 @@ export function useChatBooking({
   const placeholderKey: Record<NonNullable<Expecting>, AppMessageKey> = {
     phone: "booking.chat.placeholderPhone",
     code: "booking.chat.placeholderCode",
-    cvc: "booking.chat.placeholderCvc",
     email: "booking.chat.placeholderEmail",
     firstName: "booking.chat.placeholderName",
     lastName: "booking.chat.placeholderName",
     note: "booking.chat.placeholderNote",
-    cardNumber: "booking.chat.placeholderCardNumber",
-    cardName: "booking.chat.placeholderCardName",
-    cardExpiry: "booking.chat.placeholderCardExpiry",
-    cardCvc: "booking.chat.placeholderCvc",
     receiptEmail: "booking.chat.placeholderEmail",
     receiptPhone: "booking.chat.placeholderPhone",
   };
@@ -1009,8 +1013,10 @@ export function useChatBooking({
     /** Mientras escribe la nota para el barbero, la caja deja adjuntar fotos (las que aún caben). */
     photoRoom: expectingNow === "note" ? Math.max(0, MAX_REFERENCE_PHOTOS - state.referencePhotos.length) : 0,
     placeholder: t(expectingNow ? placeholderKey[expectingNow] : "booking.chat.placeholder"),
-    /** Lo que se espera no debe quedar a la vista (el código, la tarjeta): el modo voz lo muestra con puntos. */
-    secret: expectingNow === "code" || expectingNow === "cvc" || isCardStep(expectingNow),
+    /** Lo que se espera no debe quedar a la vista (el código): el modo voz lo muestra con puntos. La tarjeta va en su hoja. */
+    secret: expectingNow === "code",
+    /** Las hojas de la tarjeta (los campos de la pasarela): la tarjeta nunca se escribe en el chat. */
+    card: newCard,
   };
 }
 

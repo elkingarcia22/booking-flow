@@ -194,6 +194,13 @@ function ThreadRow({ thread, onSelect }: { thread: CommentThread; onSelect: () =
         <Text tone={thread.unread ? "default" : "secondary"} className="line-clamp-2">
           {root.body}
         </Text>
+        {/* Dónde se dejó: la sección y el elemento bajo el clic (lo más concreto que se pudo saber). */}
+        {(thread.location?.section || thread.location?.element) && (
+          <Text variant="caption" truncate className="flex items-center gap-1">
+            <ThemaIcon name="pointer" size="xs" tone="muted" />
+            {[thread.location.section, thread.location.element].filter(Boolean).join(" · ")}
+          </Text>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           {replies > 0 && <Text variant="caption">{labels.replies(replies)}</Text>}
           {thread.contextLabel && <Badge variant="neutral">{thread.contextLabel}</Badge>}
@@ -209,6 +216,31 @@ function ThreadRow({ thread, onSelect }: { thread: CommentThread; onSelect: () =
   )
 }
 
+/** Dónde se dejó el hilo, renglón por renglón: módulo, sección y elemento. */
+function ThreadLocation({ location }: { location: NonNullable<CommentThread["location"]> }) {
+  const { labels } = useComments()
+  const rows = [
+    [labels.whereModule, location.module],
+    [labels.whereSection, location.section],
+    [labels.whereElement, location.element],
+  ].filter((row): row is [string, string] => Boolean(row[1]))
+  if (rows.length === 0) return null
+  return (
+    <dl data-slot="comment-location" className="mx-4 mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-lg bg-surface-subtle px-3 py-2">
+      {rows.map(([label, value]) => (
+        <React.Fragment key={label}>
+          <Text as="dt" variant="caption">
+            {label}
+          </Text>
+          <Text as="dd" size="xs" className="break-words">
+            {value}
+          </Text>
+        </React.Fragment>
+      ))}
+    </dl>
+  )
+}
+
 function ThreadDetail({ thread }: { thread: CommentThread }) {
   const { reply, setResolved, setUnread, removeThread, select, labels } = useComments()
   const endRef = React.useRef<HTMLLIElement>(null)
@@ -220,6 +252,7 @@ function ThreadDetail({ thread }: { thread: CommentThread }) {
 
   return (
     <div data-slot="comment-thread" className="flex min-h-0 flex-1 flex-col">
+      {thread.location && <ThreadLocation location={thread.location} />}
       <div className="flex shrink-0 items-center gap-2 px-4 py-2">
         {thread.contextLabel && <Badge variant="neutral">{thread.contextLabel}</Badge>}
         <div className="ml-auto flex items-center gap-1">

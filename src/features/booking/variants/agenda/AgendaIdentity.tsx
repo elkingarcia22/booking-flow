@@ -5,15 +5,15 @@ import { Field, InputOtp, PhoneInput } from "@/components/forms";
 import { Text } from "@/components/typography";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ThemaIcon } from "@/icons";
 import { describeError, isApiError } from "@/lib/api";
 import { formatPhone } from "../../bookingFormat";
 import { useBookingFlow } from "../../flow/BookingContext";
 import { toastMissing } from "../../flow/missingData";
-import { useCreateCustomerMutation, useRecentCode, useRequestCodeMutation, useVerifyCodeMutation } from "../../queries";
+import { useCheckPhoneMutation, useCreateCustomerMutation, useRequestCodeMutation, useVerifyCodeMutation } from "../../queries";
+import { ConsentFields } from "../../flow/ConsentFields";
+import { useConsentBranchId } from "../../flow/consentPack";
 
 const MIN_DIGITS = 10;
 const CODE_LENGTH = 6;
@@ -21,75 +21,66 @@ const MIN_NAME = 2;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const nationalDigits = (e164: string): number => e164.replace(/\D/g, "").length - 2;
 
-/** El celular y el botón que manda el código. */
-function PhoneForm() {
+/**
+ * El celular, sin código: si ya es cliente queda reconocido (su vista previa); si es nuevo, sigue a su
+ * ficha. Solo el número que no se reconoce sin código (bloqueado) recibe el código. Con el celular ya
+ * dado (en la portada) se busca solo al abrir.
+ */
+function PhoneLookup() {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
+  const check = useCheckPhoneMutation();
   const request = useRequestCodeMutation();
   const [phone, setPhone] = React.useState(state.phone);
   const [touched, setTouched] = React.useState(false);
   const isValid = nationalDigits(phone) >= MIN_DIGITS;
+  // Con el celular de la portada se busca solo: mientras tanto, solo el aviso de que se está buscando.
+  const [isAuto] = React.useState(() => Boolean(state.phone));
+
+  const lookup = (value: string) =>
+    check.mutate(value, {
+      onSuccess: ({ customer, token }) => {
+        if (token) return dispatch({ type: "identified", phone: value, customer, token });
+        request.mutate(value, { onSuccess: (sent) => dispatch({ type: "codeSent", phone: value, sentTo: sent.sentTo, channel: sent.channel }) });
+      },
+    });
+
+  const asked = React.useRef(false);
+  React.useEffect(() => {
+    if (asked.current || !state.phone) return;
+    asked.current = true;
+    lookup(state.phone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez, al abrir
+  }, []);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setTouched(true);
     if (toastMissing(t, [!isValid && t("booking.phone.invalid")])) return;
-    request.mutate(phone, { onSuccess: (sent) => dispatch({ type: "codeSent", phone, sentTo: sent.sentTo, channel: sent.channel }) });
+    lookup(phone);
   };
+
+  const failed = check.error ?? request.error;
+  const isPending = check.isPending || request.isPending;
+  if (isAuto && isPending && !touched) {
+    return (
+      <Text size="sm" tone="muted" className="flex items-center gap-2" aria-live="polite">
+        <Spinner size="sm" />
+        {t("booking.payIdentity.checking")}
+      </Text>
+    );
+  }
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
-      <Field
-        label={t("booking.phone.label")}
-        description={t("booking.agenda.id.phoneHint")}
-        error={touched && !isValid ? t("booking.phone.invalid") : request.isError ? describeError(request.error).description : undefined}
-      >
+      <Field label={t("booking.phone.label")} description={t("booking.agenda.id.phoneHint")} error={touched && !isValid ? t("booking.phone.invalid") : failed ? describeError(failed).description : undefined}>
         <PhoneInput value={phone} onValueChange={setPhone} defaultCountry="CO" autoComplete="tel-national" />
       </Field>
-      <Button type="submit" size="lg" disabled={request.isPending}>
-        {request.isPending ? <Spinner size="sm" tone="inverse" /> : <ThemaIcon name="smsCode" />}
-        {t("booking.agenda.id.sendCode")}
+      <Button type="submit" size="lg" disabled={isPending}>
+        {isPending ? <Spinner size="sm" tone="inverse" /> : <ThemaIcon name="arrowRight" />}
+        {t("booking.phone.continue")}
       </Button>
     </form>
-  );
-}
-
-/**
- * El celular ya se dio (en la portada, o el cliente de siempre reconocido por él): el código se manda
- * solo a ese número, sin volver a pedirlo. «Cambiar número» en el paso del código lo deja escribir otro.
- */
-function SendToKnownPhone() {
-  const t = useAppT();
-  const { state, dispatch } = useBookingFlow();
-  const request = useRequestCodeMutation();
-  const recentCode = useRecentCode();
-  const sent = React.useRef(false);
-  React.useEffect(() => {
-    if (sent.current) return;
-    sent.current = true;
-    // Si ya se le mandó uno hace poco, sirve el mismo: no se pide otro solo por abrir esta hoja.
-    const recent = recentCode(state.phone);
-    if (recent) return dispatch({ type: "codeSent", phone: state.phone, sentTo: recent.sentTo, channel: recent.channel });
-    request.mutate(state.phone, { onSuccess: (next) => dispatch({ type: "codeSent", phone: state.phone, sentTo: next.sentTo, channel: next.channel }) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez, al abrir
-  }, []);
-  if (request.isError) {
-    return (
-      <div className="flex flex-col gap-3">
-        <Text size="sm" tone="negative" role="alert">
-          {describeError(request.error).description}
-        </Text>
-        <Button type="button" variant="link" size="sm" className="self-start px-0" onClick={() => dispatch({ type: "signOut" })}>
-          {t("booking.verify.changePhone")}
-        </Button>
-      </div>
-    );
-  }
-  return (
-    <Text size="sm" tone="muted" className="flex items-center gap-2">
-      <Spinner size="sm" />
-      {t("booking.payIdentity.sending", { phone: formatPhone(state.phone) })}
-    </Text>
   );
 }
 
@@ -150,6 +141,7 @@ export function ProfileForm() {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
   const create = useCreateCustomerMutation(state.token);
+  const consentBranchId = useConsentBranchId();
   const [values, setValues] = React.useState(() => state.pendingProfile ?? { firstName: "", lastName: "", email: "", marketing: false });
   const [touched, setTouched] = React.useState(false);
   // Ya los escribió en «Conozcámonos» (sin código): al confirmar el código la ficha se crea sola. Si falla
@@ -175,7 +167,7 @@ export function ProfileForm() {
     setTouched(true);
     if (toastMissing(t, [errors.firstName, errors.lastName, errors.email])) return;
     // El perfil se guarda sin moverse de la agenda: lo armado sigue en su sitio.
-    create.mutate({ firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing }, { onSuccess: (customer) => dispatch({ type: "customerUpdated", customer }) });
+    create.mutate({ firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), marketing: values.marketing, branchId: consentBranchId }, { onSuccess: (customer) => dispatch({ type: "customerUpdated", customer }) });
   };
 
   if (pending && !create.isError) {
@@ -203,12 +195,7 @@ export function ProfileForm() {
       <Field label={t("booking.profile.email")} required description={t("booking.profile.emailHint")} error={touched ? errors.email : undefined}>
         <Input type="email" inputMode="email" value={values.email} onChange={set("email")} autoComplete="email" />
       </Field>
-      <div className="flex items-start gap-3">
-        <Checkbox id="agenda-marketing" checked={values.marketing} onCheckedChange={(checked) => setValues((current) => ({ ...current, marketing: checked === true }))} />
-        <Label htmlFor="agenda-marketing" className="font-normal">
-          {t("booking.profile.marketing")}
-        </Label>
-      </div>
+      <ConsentFields id="agenda-marketing" marketing={values.marketing} onMarketingChange={(marketing) => setValues((current) => ({ ...current, marketing }))} />
       {create.isError && !serverFields && (
         <Text size="sm" tone="negative" role="alert">
           {describeError(create.error).description}
@@ -223,9 +210,9 @@ export function ProfileForm() {
 }
 
 /**
- * Quién reserva, preguntado al final y en el mismo sitio: el celular (si aún no
- * lo dio), el código y —si es la primera vez— nombre y correo. No cambia de pantalla ni toca lo
- * que ya se apartó en la agenda.
+ * Quién reserva, preguntado al final y en el mismo sitio y sin código: el celular (si aún no lo dio)
+ * y —si es la primera vez— nombre y correo. El código solo si el número no se reconoce sin él
+ * (bloqueado). No cambia de pantalla ni toca lo que ya se apartó en la agenda.
  */
 export function AgendaIdentity() {
   const t = useAppT();
@@ -262,9 +249,9 @@ export function AgendaIdentity() {
       </Alert>
     );
   }
-  if (state.customer && state.verified) return null;
-  if (state.verified) return <ProfileForm />;
+  if (state.customer) return null;
+  // Con el código confirmado, o con la sesión sin código del celular nuevo: su ficha.
+  if (state.verified || state.token) return <ProfileForm />;
   if (state.codeSentTo) return <CodeForm onBlocked={() => setBlocked(true)} />;
-  // Con el celular ya dado, directo al código; si no, primero el celular.
-  return state.phone ? <SendToKnownPhone /> : <PhoneForm />;
+  return <PhoneLookup />;
 }

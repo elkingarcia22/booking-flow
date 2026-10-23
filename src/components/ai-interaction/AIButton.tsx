@@ -58,7 +58,7 @@ export function AIButton({
         className={cn(
           "relative overflow-hidden transition-all duration-300 font-bold rounded-full",
           // El principal es el poste de Clipper: el gradiente de IA con franjas que suben, como su orbe.
-          isPrimary && !disabled && "ai-pole-button border-transparent shadow-ai-premium hover:brightness-105 active:scale-95",
+          isPrimary && !disabled && "ai-pole-button border-transparent hover:brightness-105 active:scale-95",
           // El filo con el gradiente de IA dando la vuelta despacio (quieto con «reducir movimiento»).
           isOutline && !disabled && "ai-border-flow hover:opacity-80 active:scale-95",
           size === "xs" && "h-7 px-3 text-[10px] gap-1",

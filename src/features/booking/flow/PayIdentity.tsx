@@ -11,6 +11,7 @@ import { useRecentCode, useRequestCodeMutation, useVerifyCodeMutation } from "..
 import type { OtpSent } from "../types";
 import { ProfileForm } from "../variants/agenda/AgendaIdentity";
 import { useBookingFlow } from "./BookingContext";
+import { InPlaceIdentity } from "./InPlaceIdentity";
 import { toastMissing } from "./missingData";
 
 const CODE_LENGTH = 6;
@@ -44,12 +45,12 @@ function PhoneChange({ onSent }: { onSent: (phone: string) => void }) {
 }
 
 /**
- * El código, pedido al pagar (o al apuntarse a la lista de espera, comprar un paquete…): llega solo al
- * celular que escribió en la portada. Al completarlo se
- * sabe quién es —sin moverse de la pantalla de pago—: el cliente de siempre sigue a pagar con sus
+ * El código: llega solo al celular que escribió en la portada. Se pide para entrar a «Mis citas», para
+ * pagar con una tarjeta que ya tenía guardada y al número que no se puede reconocer sin él (bloqueado).
+ * Al completarlo se sabe quién es —sin moverse de pantalla—: el cliente de siempre sigue con sus
  * tarjetas y su membresía, el nuevo deja su ficha y el número bloqueado va a su aviso.
  */
-function CodeGate() {
+export function CodeGate() {
   const t = useAppT();
   const { state, dispatch } = useBookingFlow();
   const request = useRequestCodeMutation();
@@ -139,9 +140,22 @@ function CodeGate() {
   );
 }
 
-/** Quién paga, justo antes de pagar: el código y, si es la primera vez, su ficha. */
+/**
+ * Quién paga, justo antes de pagar, sin código: el de siempre ya está reconocido por su celular; el
+ * nuevo deja su ficha (o se crea sola con lo de «Conozcámonos»). El código solo aparece si el número no
+ * se reconoce sin él, o después, si elige pagar con una tarjeta que ya tenía guardada.
+ */
 export function PayIdentity() {
   const { state } = useBookingFlow();
-  if (state.verified && state.customer) return null;
-  return state.verified ? <ProfileForm /> : <CodeGate />;
+  if (state.customer) return null;
+  // Con el código confirmado, o con la sesión sin código del celular nuevo: su ficha.
+  if (state.verified || state.token) return <ProfileForm />;
+  // Aún no se sabe quién es: se busca su celular, sin moverse de pantalla.
+  return <InPlaceIdentity />;
+}
+
+/** Quién compra con tarjeta: su ficha sin código o, si ya tenía tarjetas guardadas, el código. */
+export function CardBuyerIdentity() {
+  const { state } = useBookingFlow();
+  return state.customer ? <CodeGate /> : <PayIdentity />;
 }

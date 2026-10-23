@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { CommentAuthor, CommentFilter, CommentLabels, CommentThread } from "./commentTypes"
+import type { CommentAuthor, CommentFilter, CommentLabels, CommentLocation, CommentThread } from "./commentTypes"
 
 /** «browse»: se navega la pantalla con normalidad. «comment»: el clic deja un pin. */
 export type CommentMode = "browse" | "comment"
@@ -9,6 +9,8 @@ export interface CommentDraft {
   x: number
   y: number
   context?: string
+  /** Dónde cayó el clic: lo calcula la capa con su `locate`. */
+  location?: CommentLocation
 }
 
 export interface CommentsContextValue {

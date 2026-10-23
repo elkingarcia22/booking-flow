@@ -1,169 +1,83 @@
+import * as React from "react";
 import type { useAppT } from "@/app/i18n";
 import type { BookingState } from "../../bookingState";
-import { cardBrandOf, cvcLengthOf, digitsOf, expiryOk, groupCard, type CardBrand } from "../../flow/cardValidation";
+import type { CardValues } from "../../flow/cardValidation";
 import { NEW_CARD } from "../../flow/SavedCardPicker";
 import type { PaymentController } from "../../flow/usePaymentController";
-import { makeQuestion, type BookingQuestion } from "./chatQuestions";
-import type { Expecting, MessageInput } from "./chatKit";
-
-const MIN_CARD = 13;
-const MAX_CARD = 19;
-const MIN_HOLDER = 3;
-const BRAND_LABEL: Readonly<Record<Exclude<CardBrand, "other">, string>> = { visa: "Visa", mastercard: "Mastercard", amex: "Amex" };
-
-/** Los pasos de la tarjeta nueva en la caja: número, titular, vencimiento y CVC. */
-export type CardStep = Extract<Expecting, "cardNumber" | "cardName" | "cardExpiry" | "cardCvc">;
-export const isCardStep = (value: Expecting): value is CardStep => value === "cardNumber" || value === "cardName" || value === "cardExpiry" || value === "cardCvc";
-
-const plain = (value: string): string => value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-const STOP = /\b(cancelar|cancela|otra forma|otro metodo|mejor no|cambiar metodo)\b/;
-
-/** «1228», «12 28», «12/2028» → «12/28». */
-export function normalizeExpiry(text: string): string {
-  const digits = digitsOf(text);
-  if (digits.length === 6) return `${digits.slice(0, 2)}/${digits.slice(4)}`;
-  if (digits.length === 3) return `0${digits.slice(0, 1)}/${digits.slice(1)}`;
-  return digits.length === 4 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : text.trim();
-}
-
-/** Lo más lejos que vence una tarjeta: más que esto es un año mal escrito. */
-const MAX_YEARS_AHEAD = 20;
-const MONTHS = 12;
-
-export type ExpiryProblem =
-  | { key: "booking.chat.cardBadExpiryFormat" }
-  | { key: "booking.chat.cardBadMonth"; params: { month: string } }
-  | { key: "booking.chat.cardOnlyYear"; params: { year: string; short: string } }
-  | { key: "booking.chat.cardExpired" | "booking.chat.cardTooFar"; params: { date: string } };
+import type { MessageInput } from "./chatKit";
 
 /**
- * Qué está mal en el vencimiento escrito, para decirlo con precisión: «3030»
- * no es un mes (30), «2030» es solo el año, «0820» ya venció… `null` si sirve.
+ * La tarjeta en la conversación. Los datos de la tarjeta **no se escriben en el chat**: se abre la hoja
+ * de la tarjeta, cuyos campos son de la pasarela (Stripe Elements, Wompi…), y al servidor solo llega
+ * el token. Lo mismo con el CVC de una tarjeta guardada. El hilo solo dice qué tarjeta quedó.
  */
-export function expiryProblem(text: string, now = new Date()): ExpiryProblem | null {
-  const digits = digitsOf(text);
-  const thisYear = now.getFullYear() % 100;
-  // «2030»: un año de cuatro cifras sin mes.
-  if (digits.length === 4 && digits.startsWith("20") && Number(digits.slice(0, 2)) > MONTHS && Number(digits.slice(2)) >= thisYear) {
-    return { key: "booking.chat.cardOnlyYear", params: { year: digits, short: digits.slice(2) } };
-  }
-  if (![3, 4, 6].includes(digits.length) || (digits.length === 6 && !digits.slice(2, 4).startsWith("20"))) return { key: "booking.chat.cardBadExpiryFormat" };
-  const expiry = normalizeExpiry(text);
-  const [month = "", year = ""] = expiry.split("/");
-  if (Number(month) < 1 || Number(month) > MONTHS) return { key: "booking.chat.cardBadMonth", params: { month } };
-  if (!expiryOk(expiry, now)) return { key: "booking.chat.cardExpired", params: { date: expiry } };
-  if (Number(year) - thisYear > MAX_YEARS_AHEAD) return { key: "booking.chat.cardTooFar", params: { date: expiry } };
-  return null;
-}
 
-/** Cómo se ve en el hilo lo que se escribe en cada paso: el número y el CVC nunca enteros. */
-export function maskCardInput(step: CardStep, text: string): string {
-  const digits = digitsOf(text);
-  if (step === "cardNumber") return digits.length >= 4 ? `•••• ${digits.slice(-4)}` : "••••";
-  if (step === "cardCvc") return "•".repeat(Math.max(3, Math.min(4, digits.length)));
-  // El vencimiento y el nombre, tal como los escribió (si el vencimiento está mal, se ve qué puso).
-  return text.trim();
-}
-
-/** La tarjeta a medio escribir: un dato llega en cada mensaje. */
-export interface CardDraft {
-  number: string;
-  name: string;
-  expiry: string;
-  cvc: string;
-}
-
-export const EMPTY_CARD: CardDraft = { number: "", name: "", expiry: "", cvc: "" };
+/** La hoja abierta: tarjeta nueva, o el CVC de una guardada. */
+/** `canSave`: sin perfil no se ofrece guardarla. */
+export type ChatCardSheet = { kind: "new"; canSave: boolean } | { kind: "cvc"; cardId: string; label: string; brand: string } | null;
 
 export interface CardKit {
   t: ReturnType<typeof useAppT>;
   say: (...messages: MessageInput[]) => void;
-  ask: (question: BookingQuestion, text?: string) => void;
-  expect: (next: Expecting) => void;
   stateRef: { readonly current: BookingState };
   payment: { readonly current: PaymentController | null };
-  cardDraft: { current: CardDraft };
-  /** Volver a elegir cómo pagar (si se arrepiente a mitad de la tarjeta). */
+  /** Volver a elegir cómo pagar (si cierra la hoja sin terminar). */
   askMethod: (lead?: string) => void;
+  /** Con el CVC de la guardada ya puesto, sigue el resumen para pagar. */
+  onCvcReady: () => void;
 }
 
-/**
- * La tarjeta nueva dentro de la conversación: el asistente pide un dato a la
- * vez —número, nombre como aparece en la tarjeta, vencimiento y CVC—, revisa
- * cada uno al llegar y, al final, pregunta si se guarda para la próxima. En el
- * hilo el número se ve como «•••• 4242» y el CVC como «•••». Los datos van al
- * mismo cobro de las otras versiones (`usePaymentController`).
- */
 export function useChatNewCard(kit: CardKit) {
-  const { t, say, ask, expect, stateRef, payment, askMethod, cardDraft: values } = kit;
-  const draft = EMPTY_CARD;
+  const { t, say, stateRef, payment, askMethod, onCvcReady } = kit;
+  const [sheet, setSheet] = React.useState<ChatCardSheet>(null);
+  // La hoja avisa que se cierra también después de confirmar: eso no es «la dejó».
+  const settled = React.useRef(false);
 
-  const brandName = (number: string): string => {
-    const brand = cardBrandOf(number);
-    return brand === "other" ? t("booking.chat.cardGeneric") : BRAND_LABEL[brand];
+  const open = (next: NonNullable<ChatCardSheet>) => {
+    settled.current = false;
+    setSheet(next);
   };
 
   const start = (lead?: string) => {
-    values.current = { ...draft };
-    expect("cardNumber");
-    say({ text: [lead, t("booking.chat.cardAskNumber")].filter(Boolean).join("\n\n") });
+    say({ text: [lead, t("booking.chat.cardInSheet")].filter(Boolean).join("\n\n") });
+    open({ kind: "new", canSave: Boolean(stateRef.current.customer) });
   };
 
-  /** Un paso de la tarjeta con lo que se escribió; pide el siguiente o vuelve a pedir el mismo. */
-  const submit = (step: CardStep, text: string) => {
-    if (STOP.test(plain(text))) {
-      expect(null);
-      values.current = { ...draft };
-      return askMethod(t("booking.chat.cardStopped"));
-    }
-    const current = values.current;
-    if (step === "cardNumber") {
-      const digits = digitsOf(text);
-      if (digits.length < MIN_CARD || digits.length > MAX_CARD) return say({ text: t("booking.chat.cardBadNumber") });
-      values.current = { ...current, number: groupCard(digits) };
-      expect("cardName");
-      return say({ text: t("booking.chat.cardAskName", { card: `${brandName(digits)} •••• ${digits.slice(-4)}` }) });
-    }
-    if (step === "cardName") {
-      if (text.trim().length < MIN_HOLDER) return say({ text: t("booking.chat.cardBadName") });
-      values.current = { ...current, name: text.trim().toUpperCase() };
-      expect("cardExpiry");
-      return say({ text: t("booking.chat.cardAskExpiry") });
-    }
-    if (step === "cardExpiry") {
-      const problem = expiryProblem(text);
-      if (problem) return say({ text: "params" in problem ? t(problem.key, problem.params) : t(problem.key) });
-      const expiry = normalizeExpiry(text);
-      values.current = { ...current, expiry };
-      expect("cardCvc");
-      return say({ text: t("booking.chat.cardAskCvc", { count: cvcLengthOf(cardBrandOf(current.number)) }) });
-    }
-    const cvc = digitsOf(text);
-    if (cvc.length !== cvcLengthOf(cardBrandOf(current.number))) return say({ text: t("booking.chat.cardBadCvc", { count: cvcLengthOf(cardBrandOf(current.number)) }) });
-    values.current = { ...current, cvc };
-    expect(null);
-    if (!stateRef.current.customer) return deliver(false);
-    ask(makeQuestion("cardSave", t("booking.chat.cardSaveTitle"), [{ label: t("booking.chat.cardSaveYes"), value: "yes", emoji: "🔒" }, { label: t("booking.chat.cardSaveNo"), value: "no" }], { hint: t("booking.chat.cardSaveHint") }));
+  const askSavedCvc = (card: { id: string; brand: string; last4: string }) => {
+    const label = `${card.brand} •••• ${card.last4}`;
+    say({ text: t("booking.chat.cvcInSheet", { card: label }) });
+    open({ kind: "cvc", cardId: card.id, label, brand: card.brand });
   };
 
   /** Entrega la tarjeta al cobro; el cobro avisa (`cardAdded`) y la conversación sigue con el resumen. */
-  const deliver = (save: boolean) => {
+  const confirmNew = (values: CardValues, save: boolean) => {
+    settled.current = true;
+    setSheet(null);
     const controller = payment.current;
     if (!controller) return;
-    controller.setCard({ ...values.current });
+    controller.setCard({ ...values });
     controller.setSaveCard(save);
     controller.setCardChoice(NEW_CARD);
     controller.setShowCardErrors(false);
     if (controller.reserve.isError) controller.reserve.reset();
-    values.current = { ...draft };
   };
 
-  /** La respuesta a «¿La guardo para la próxima?»; `false` si la pregunta no es de aquí. */
-  const answerCard = (question: BookingQuestion, value: string | null): boolean => {
-    if (question.kind !== "cardSave") return false;
-    deliver(value === "yes");
-    return true;
+  const confirmCvc = (cvc: string) => {
+    settled.current = true;
+    setSheet(null);
+    payment.current?.setSavedCvc(cvc);
+    onCvcReady();
   };
 
-  return { start, submit, answerCard };
+  const onOpenChange = (next: boolean) => {
+    if (next) return;
+    setSheet(null);
+    if (settled.current) return;
+    settled.current = true;
+    askMethod(t("booking.chat.cardStopped"));
+  };
+
+  return { start, askSavedCvc, sheet, confirmNew, confirmCvc, onOpenChange };
 }
+
+export type ChatCardController = ReturnType<typeof useChatNewCard>;

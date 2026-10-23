@@ -1,4 +1,5 @@
 import { PRODUCTS, SERVICES, type MockClient } from "../calendar/seed";
+import { HEALTH_CONSENT_VERSION, consentCountryOf, consentVersionOf } from "@/features/legal/consent";
 import { PRODUCT_PHOTOS } from "../media";
 
 /**
@@ -35,14 +36,132 @@ export interface MockCustomerProfile {
    * Aceptó recibir promociones: cuándo y desde dónde. Sin esto, no se le escribe más que lo de sus
    * citas (Ley 1581: consentimiento previo, expreso e informado, y que se pueda probar).
    */
-  marketingConsent?: { accepted: boolean; at: string; source: "booking" | "app" };
+  /** El permiso de promociones, con el texto que se aceptó (versión y país): es la prueba. */
+  marketingConsent?: { accepted: boolean; at: string; source: "booking" | "app" | "whatsapp" | "sms"; version?: string; country?: string };
+  /** El permiso aparte para anotar alergias y medicamentos: sin él no se guardan. */
+  healthConsent?: { accepted: boolean; at: string; source: "booking" | "app"; version: string; by?: string };
+  /** Se borraron sus datos personales por solicitud (el historial contable queda, anónimo). */
+  erasedAt?: string;
+  /** Respondió STOP/BAJA por SMS: no se le manda ningún SMS (tampoco los de sus citas) hasta ALTA. */
+  smsStop?: { at: string } | null;
   /** Borrado del directorio; la agenda conserva sus citas. */
   deleted?: boolean;
+  /** La tanda de importación que lo trajo (para poder deshacerla). */
+  importBatch?: string;
+  /** Etiquetas propias («cera mate», «VIP», «estudiante»), en minúsculas y sin repetir. */
+  tags?: string[];
+  /** Cómo llegó: lo que respondió a «¿cómo nos conociste?» o lo que dijo su enlace. */
+  source?: MockCustomerSource | null;
+  /** Quién lo refirió (id del cliente), si llegó con un código de referido. */
+  referredBy?: string | null;
 }
 
+export const CUSTOMER_SOURCES = ["instagram", "google", "facebook", "tiktok", "referral", "walkin", "other"] as const;
+export type MockCustomerSource = (typeof CUSTOMER_SOURCES)[number];
+
 /** Solo lo que cambió o se creó; el resto se deriva al vuelo. */
+/** Una solicitud de un titular sobre sus datos: lo que pidió, por dónde, el plazo y cómo se resolvió. */
+export interface MockPrivacyRequest {
+  id: string;
+  clientId: string;
+  /** El nombre al momento de pedirlo (si luego se borra, el registro dice de quién era). */
+  clientName: string;
+  type: "access" | "export" | "rectify" | "erase" | "revoke" | "other";
+  channel: "app" | "phone" | "email" | "in_person" | "whatsapp" | "sms";
+  status: "open" | "done";
+  note: string;
+  requestedAt: string;
+  /** Hasta cuándo hay que responder según el país de la sede. */
+  dueAt: string;
+  doneAt: string | null;
+  by: string;
+}
+
+/** La fórmula de un corte: lo que hay que repetir la próxima vez. Todo es texto libre y opcional. */
+export interface MockCutFormula {
+  /** Máquina o técnica («clipper», «tijera»). */
+  tool: string;
+  /** Números de peine o guarda («1 a los lados, 3 arriba»). */
+  guard: string;
+  /** El degradado («bajo», «medio», «skin»). */
+  fade: string;
+  /** Barba y contornos. */
+  beard: string;
+  /** Producto que se usó o se recomendó. */
+  products: string;
+  notes: string;
+}
+
+/** Un corte anotado: la fórmula y las fotos del resultado, de una visita. */
+export interface MockCutRecord {
+  id: string;
+  clientId: string;
+  /** AAAA-MM-DD de la visita. */
+  date: string;
+  appointmentId: string | null;
+  barberId: string | null;
+  formula: MockCutFormula;
+  /** Fotos del resultado (data URL), hasta 4. */
+  photos: string[];
+  createdAt: string;
+  by: string;
+}
+
+/** Un referido: quién trajo a quién, y si ya se dio el premio (al cobrar la primera visita del nuevo). */
+export interface MockReferral {
+  id: string;
+  referrerId: string;
+  referredId: string;
+  status: "pending" | "rewarded";
+  createdAt: string;
+  rewardedAt: string | null;
+  /** Lo que recibió cada uno como saldo a favor. */
+  amount: number;
+}
+
 export interface MockCustomersState {
   profiles: Record<string, MockCustomerProfile>;
+  privacyRequests?: MockPrivacyRequest[];
+  /** Los cortes anotados de cada cliente. */
+  cuts?: Record<string, MockCutRecord[]>;
+  referrals?: MockReferral[];
+  /** Los grupos guardados (filtros con nombre) y las campañas mandadas a ellos. */
+  groups?: MockCustomerGroup[];
+  campaigns?: MockCampaign[];
+}
+
+export interface MockGroupFilters {
+  segment: string | null;
+  alert: "atRisk" | "overdue" | "birthday" | "unreliable" | null;
+  tag: string | null;
+  source: string | null;
+}
+
+/** Un grupo guardado: un filtro de Clientes con nombre, para volver a él y mandarle campañas. */
+export interface MockCustomerGroup {
+  id: string;
+  name: string;
+  filters: MockGroupFilters;
+  createdAt: string;
+  by: string;
+}
+
+/** Una campaña: a quién, qué decía, cuándo salió y lo que costaría. Los resultados se calculan al pedirla. */
+export interface MockCampaign {
+  id: string;
+  name: string;
+  groupId: string | null;
+  filters: MockGroupFilters;
+  body: string;
+  couponCode: string | null;
+  createdAt: string;
+  by: string;
+  /** Cuándo se pidió que saliera (cada mensaje sale en la franja legal de la sede de su cliente). */
+  sendAt: string;
+  recipients: string[];
+  excluded: { noConsent: number; noPhone: number; promoCap: number; blocked: number };
+  estimatedCost: number;
+  status: "scheduled" | "cancelled";
 }
 
 export const emptyCustomers = (): MockCustomersState => ({ profiles: {} });
@@ -80,6 +199,9 @@ const slug = (name: string) =>
 
 const isoDay = (date: Date) => date.toISOString().slice(0, 10);
 
+const DEMO_TAGS: readonly string[][] = [[], [], [], ["cera mate"], ["estudiante"], ["barba"], ["cera mate", "barba"], [], ["vip"], []];
+const DEMO_SOURCES: readonly (MockCustomerSource | null)[] = ["instagram", "google", "walkin", null, "referral", "instagram", "facebook", null, "tiktok", "other"];
+
 export function deriveProfile(client: MockClient, now = new Date()): MockCustomerProfile {
   const h = hashOf(client.id);
   const place = PLACES[h % PLACES.length];
@@ -105,6 +227,14 @@ export function deriveProfile(client: MockClient, now = new Date()): MockCustome
     blocked: h % 23 === 7,
     createdAt: new Date(now.getTime() - (60 + (hashOf(client.id, 2) % 700)) * DAY_MS).toISOString(),
     guests,
+    // Unas cuantas etiquetas y orígenes para que el filtro y Métricas tengan con qué mostrarse.
+    tags: DEMO_TAGS[hashOf(client.id, 7) % DEMO_TAGS.length],
+    source: DEMO_SOURCES[hashOf(client.id, 8) % DEMO_SOURCES.length],
+    // En la demo, quien ya trae alergias o medicamentos anotados dio el permiso al anotarlos.
+    // En la demo, unos tres de cada cinco aceptaron promociones al reservar (con el texto vigente de su país): así las
+    // campañas, la reactivación y el cumpleaños tienen a quién escribirle. Los demás quedan sin permiso, como en la vida real.
+    ...(hashOf(client.id, 9) % 5 < 3 ? { marketingConsent: { accepted: true, at: new Date(now.getTime() - (20 + (hashOf(client.id, 10) % 400)) * DAY_MS).toISOString(), source: "booking" as const, version: consentVersionOf(place[0]), country: consentCountryOf(place[0]) } } : {}),
+    ...(client.notes.some((note) => note.kind !== "note") ? { healthConsent: { accepted: true, at: new Date(now.getTime() - (30 + (hashOf(client.id, 4) % 300)) * DAY_MS).toISOString(), source: "app" as const, version: HEALTH_CONSENT_VERSION } } : {}),
   };
 }
 

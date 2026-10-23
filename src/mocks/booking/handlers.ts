@@ -1,9 +1,13 @@
 import { delay, http, HttpResponse, type DefaultBodyType } from "msw";
-import { ACCOUNTS, db } from "../db";
+import { SIMULATED_TOKEN } from "@/features/payments/gateway";
+import { accountById, db } from "../db";
+import { lineupRank } from "../team/workforce";
+import { releaseAppointmentStock, stockLevel, syncAppointmentStock } from "../inventory/stock";
 import { localIso, parseClock, type MockAppointment, type MockClient } from "../calendar/seed";
 import { appointmentsOn } from "../calendar/handlers";
 import { profileOf, saveProfile } from "../customers/handlers";
-import { cancellationTerms, chargesCardFee, computeTotals, coverByPackages, findPromo, promoDiscount, tipAmount } from "@/features/booking/pricing";
+import { cancellationTerms, chargesCardFee, computeTotals, coverByPackages, promoDiscount, tipAmount } from "@/features/booking/pricing";
+import { COUPON_PROBLEMS, checkCoupon, redeemCoupon } from "../marketing/coupons";
 import {
   availability,
   barberFree,
@@ -26,18 +30,18 @@ import {
   findReservationLine,
   isBlockedPhone,
   myAppointments,
+  reservationTaxPercent,
   reservationView,
   serviceName,
   shop,
-  taxPercent,
   tipOptions,
   visitSuggestion,
 } from "./logic";
 import { alternatives, earliest, joinWaitlist, type WaitlistWindow } from "./alternatives";
-import { cancelMessages, offerFreedSlot, rescheduleMessages, scheduleMessages } from "./reminders";
+import { cancelMessages, newConfirmToken, offerFreedSlot, rescheduleMessages, scheduleMessages } from "./reminders";
 import { MAX_REPEATS, REPEAT_WEEKS, repeatAppointment, type RepeatWeeks } from "./recurring";
 import { addReview, reviewOfAppointment, reviewsOf } from "./reviews";
-import { createGiftCard, findGiftCard, spendGiftCard } from "./giftCards";
+import { createGiftCard, findGiftCard, spendGiftCard, sendGiftCard } from "./giftCards";
 import { activePackages, buyPackage, packageOffers, spendPackages } from "./packages";
 import { FUNNEL_STEPS, funnelSummary, recordEvent } from "./funnel";
 
@@ -45,7 +49,11 @@ import { FUNNEL_STEPS, funnelSummary, recordEvent } from "./funnel";
 const GIFT_MIN = 10;
 const GIFT_MAX = 500;
 import { MAX_PHOTO_CHARS, MAX_REFERENCE_PHOTOS, PHOTO_PATTERN } from "@/features/booking/flow/referencePhoto";
-import { DECLINED_CARD, DEMO_GUESTS, DEMO_GUESTS_CLIENT, DEMO_OTP, type MockBookingLine, type MockReservation } from "./state";
+import { branchOnlineMethods, branchTimeZone, consentProof, startInstant, taxInclusive } from "../settings/branchRules";
+import { instantOf } from "@/lib/time/zoned";
+import { settlementsOf } from "./settlement";
+import { productPriceIn } from "../catalogPrices";
+import { DEMO_GUESTS, DEMO_GUESTS_CLIENT, DEMO_OTP, type MockBookingLine, type MockReservation } from "./state";
 
 /**
  * La reserva en línea del backend simulado (docs/API_CONTRACT.md, «Reserva en
@@ -72,8 +80,14 @@ const findClient = (id: string) => db.calendar.clients.find((client) => client.i
 
 /** Una sesión verificada es de un cliente (su id) o de un celular nuevo aún sin perfil (`phone:+57…`). */
 const PHONE_SESSION = "phone:";
-/** La sesión de vista previa (reconocido por su celular, sin código): solo sirve para su propuesta de visita. */
+/**
+ * La sesión sin código (reconocido por su celular, o el nuevo que acaba de crear su ficha): sirve para su
+ * propuesta de visita, reservar y pagar con lo que escriba en el momento y la lista de espera. Lo que
+ * expone o gasta lo guardado —sus tarjetas, saldo, paquetes, cortesías y «Mis citas»— pide el código.
+ */
 const PREVIEW_SESSION = "preview:";
+/** Un celular nuevo, sin código: solo sirve para crear su ficha (que pasa a ser una sesión sin código). */
+const NEW_PHONE_SESSION = "newphone:";
 const sessionValue = (request: Request): string | undefined => {
   const token = request.headers.get("x-booking-token");
   return token ? db.bookingSessions.get(token) : undefined;
@@ -84,7 +98,7 @@ function sessionClient(request: Request): MockClient | null {
   return value && !value.startsWith(PHONE_SESSION) && !value.startsWith(PREVIEW_SESSION) ? findClient(value) ?? null : null;
 }
 
-/** El cliente de una sesión verificada o de vista previa: solo para lo que se ve sin código. */
+/** El cliente de una sesión verificada o sin código: para lo que no necesita el código. */
 function previewClient(request: Request): MockClient | null {
   const value = sessionValue(request);
   if (value?.startsWith(PREVIEW_SESSION)) return findClient(value.slice(PREVIEW_SESSION.length)) ?? null;
@@ -96,6 +110,21 @@ const sessionPhone = (request: Request): string | null => {
   const value = sessionValue(request);
   return value?.startsWith(PHONE_SESSION) ? value.slice(PHONE_SESSION.length) : null;
 };
+
+/** El celular nuevo de una sesión sin código, que aún no tiene ficha. */
+const newPhoneOf = (request: Request): string | null => {
+  const value = sessionValue(request);
+  return value?.startsWith(NEW_PHONE_SESSION) ? value.slice(NEW_PHONE_SESSION.length) : null;
+};
+
+/**
+ * Lo que se ve sin código: nada de correo, tarjetas, saldo, paquetes ni membresía. Solo si tiene
+ * tarjetas guardadas (sin cuáles), para pedir el código cuando quiera pagar con una.
+ */
+function previewCustomerOf(client: MockClient) {
+  const full = customerOf(client);
+  return { ...full, email: "", cards: [], hasSavedCards: full.cards.length > 0, credit: 0, packages: [], loyalty: null };
+}
 
 const NO_SESSION = () => error(403, "booking_session", "Tu sesión venció. Escribe tu celular y el código otra vez.");
 
@@ -120,44 +149,41 @@ export function resetBookingLimits(): void {
   phoneChecks = [];
 }
 
-/** Luhn: la misma comprobación que hace la pasarela antes de hablar con el banco. */
-function validCard(number: string): boolean {
-  const digits = number.replace(/\D/g, "");
-  if (digits.length < 13 || digits.length > 19) return false;
-  let sum = 0;
-  [...digits].reverse().forEach((char, index) => {
-    let value = Number(char);
-    if (index % 2 === 1) value = value * 2 > 9 ? value * 2 - 9 : value * 2;
-    sum += value;
-  });
-  return sum % 10 === 0;
-}
-
-const brandOf = (number: string): string => (number.startsWith("4") ? "Visa" : number.startsWith("5") ? "Mastercard" : number.startsWith("3") ? "Amex" : "Tarjeta");
+/** El último paso de seguridad: aunque una pantalla vieja lo intentara, el número no se acepta aquí. */
+const RAW_CARD_FIELDS = ["number", "cvc", "cvv", "pan"] as const;
+const MAX_HOLDER = 80;
 
 /**
- * Cobra con tarjeta (guardada por su token, nueva o la billetera): una reserva, un anticipo o una
- * tarjeta de regalo. Devuelve la marca y los últimos 4, o la respuesta de error de la pasarela.
+ * Cobra con tarjeta (guardada por su token, nueva por el token de la pasarela, o la billetera): una
+ * reserva, un anticipo o una tarjeta de regalo. A este servidor nunca llegan el número ni el CVC: la
+ * pasarela los recibe en sus campos y devuelve un token (`src/features/payments/gateway.ts`).
+ * Devuelve la marca y los últimos 4, o la respuesta de error.
  */
-function chargeCard(client: MockClient, input: Record<string, unknown>, via: "card" | "wallet"): { last4: string; brand: string } | Response {
+function chargeCard(client: MockClient, input: Record<string, unknown>, via: "card" | "wallet", verified: boolean): { last4: string; brand: string } | Response {
+  if (via === "wallet") return { last4: "4242", brand: "Wallet" };
   const savedCardId = text(input.savedCardId);
-  if (via === "card" && savedCardId) {
+  if (savedCardId) {
+    // Cobrar una tarjeta guardada es lo único del pago que pide el código.
+    if (!verified) return error(403, "booking_session", "Confirma con el código para pagar con tu tarjeta guardada.");
     // Una tarjeta guardada se cobra con su token: aquí nunca llega el número.
     const saved = cardsOf(client.id).find((item) => item.id === savedCardId);
     if (!saved) return error(422, "card_invalid", "Esa tarjeta ya no está guardada. Elige otra.", { fields: { card: ["Esa tarjeta ya no está guardada. Elige otra."] } });
     return { last4: saved.last4, brand: saved.brand };
   }
   const card = asRecord(input.card as DefaultBodyType);
-  const number = via === "wallet" ? "4242424242424242" : text(card.number).replace(/\D/g, "");
-  if (!validCard(number)) return error(422, "card_invalid", "Revisa el número de la tarjeta.", { fields: { card: ["Revisa el número de la tarjeta."] } });
-  if (number === DECLINED_CARD) return error(402, "card_declined", "El banco rechazó la tarjeta. Prueba con otra o paga en la barbería.");
-  const [expMonth, expYear] = text(card.expiry).split("/").map(Number);
-  if (via === "card" && card.save === true && expMonth && expYear) {
-    saveCard(client.id, { brand: brandOf(number), last4: number.slice(-4), expMonth, expYear: 2000 + expYear, holder: text(card.name) });
+  if (RAW_CARD_FIELDS.some((field) => field in card)) return error(422, "raw_card_rejected", "Los datos de la tarjeta van a la pasarela, no a este servidor.", { fields: { card: ["Vuelve a escribir la tarjeta."] } });
+  const token = text(card.token);
+  const last4 = text(card.last4);
+  const expMonth = Number(card.expMonth);
+  const expYear = Number(card.expYear);
+  if (!SIMULATED_TOKEN.test(token) || !/^\d{4}$/.test(last4) || !Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12 || !Number.isInteger(expYear) || expYear < 2000) {
+    return error(422, "card_invalid", "Revisa la tarjeta.", { fields: { card: ["Revisa la tarjeta."] } });
   }
-  return { last4: number.slice(-4), brand: via === "wallet" ? "Wallet" : brandOf(number) };
+  if (token.startsWith("tok_sim_decline_")) return error(402, "card_declined", "El banco rechazó la tarjeta. Prueba con otra o paga en la barbería.");
+  const brand = text(card.brand).slice(0, 20) || "Tarjeta";
+  if (card.save === true) saveCard(client.id, { brand, last4, expMonth, expYear, holder: text(card.name).slice(0, MAX_HOLDER) });
+  return { last4, brand };
 }
-
 
 interface PlannedItem {
   guestName: string | null;
@@ -189,12 +215,17 @@ function planItems(branchId: string, items: unknown[], client: MockClient): { pl
     const day = start.slice(0, 10);
     const time = start.slice(11, 16);
     const minute = parseClock(time);
-    if (new Date(start).getTime() < Date.now() + minNotice * 60_000) return { problem: "Esa hora ya no se puede reservar. Elige otra." };
+    if (instantOf(start, branchTimeZone(branchId)).getTime() < Date.now() + minNotice * 60_000) return { problem: "Esa hora ya no se puede reservar. Elige otra." };
     const durationMin = durationOf(serviceIds);
     appointmentsOn(branchId, day);
     const overlapsTaken = (barberId: string) => taken.some((slot) => slot.barberId === barberId && slot.day === day && minute < slot.end && slot.start < minute + durationMin);
     const wanted = text(item.barberId);
-    const candidates = bookableBarbers(branchId).filter((barber) => (wanted ? barber.id === wanted : true) && serviceIds.every((id) => barberPrice(barber.id, id) !== null));
+    // Sin preferencia, el cliente va a quien le toca en la fila de Equipo (el que menos lleva hoy), no al primero.
+    const rank = wanted ? [] : lineupRank(branchId, day);
+    const position = (id: string) => (rank.indexOf(id) === -1 ? Number.MAX_SAFE_INTEGER : rank.indexOf(id));
+    const candidates = bookableBarbers(branchId)
+      .filter((barber) => (wanted ? barber.id === wanted : true) && serviceIds.every((id) => barberPrice(barber.id, id) !== null))
+      .sort((a, b) => position(a.id) - position(b.id));
     const chosen = candidates.find((barber) => !overlapsTaken(barber.id) && barberFree(branchId, barber.id, day, minute, durationMin));
     if (!chosen) return { problem: wanted ? "El barbero no está disponible a esa hora. Por favor elige otra." : "Ese horario acaba de ser tomado. Por favor elige otro." };
     const guestId = text(item.guestId);
@@ -215,7 +246,7 @@ function planItems(branchId: string, items: unknown[], client: MockClient): { pl
       day,
       time,
       durationMin,
-      price: serviceIds.reduce((sum, id) => sum + (barberPrice(chosen.id, id) ?? 0), 0),
+      price: serviceIds.reduce((sum, id) => sum + (barberPrice(chosen.id, id, branchId) ?? 0), 0),
       visitId: text(item.visitId) || null,
     });
   }
@@ -240,6 +271,9 @@ function seedDemoGuests(client: MockClient | undefined) {
   db.booking = { ...db.booking, demoGuestsSeeded: true };
   db.persist();
 }
+
+/** La sucursal por la que entra quien no eligió una todavía: la primera activa. */
+const firstBranchId = (): string => (db.settings.lists.branches.find((item) => item.status === "active")?.id as string | undefined) ?? "ma";
 
 export const bookingHandlers = [
   http.get(`${BASE}/shop`, async () => {
@@ -298,7 +332,7 @@ export const bookingHandlers = [
   http.post(`${BASE}/waitlist`, async ({ request }) => {
     await delay(LATENCY_MS);
     const input = asRecord(await request.json().catch(() => ({})));
-    const client = sessionClient(request);
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
     const branchId = text(input.branchId);
     const date = text(input.date);
@@ -315,7 +349,7 @@ export const bookingHandlers = [
 
   http.delete(`${BASE}/waitlist/:id`, async ({ request, params }) => {
     await delay(LATENCY_MS);
-    const client = sessionClient(request);
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
     const entry = db.calendar.waitlist.find((item) => item.id === params.id);
     // Solo quien se apuntó puede salir de la lista.
@@ -365,7 +399,9 @@ export const bookingHandlers = [
     // El celular es el verificado con el código, no el que diga el formulario.
     const already = sessionClient(request);
     if (already) return HttpResponse.json(customerOf(already));
-    const phone = sessionPhone(request);
+    // El nuevo sin código crea su ficha igual; su sesión sigue sin código (no ve lo guardado de nadie).
+    const unverifiedPhone = newPhoneOf(request);
+    const phone = sessionPhone(request) ?? unverifiedPhone;
     if (!phone) return NO_SESSION();
     const firstName = text(input.firstName);
     const lastName = text(input.lastName);
@@ -378,33 +414,42 @@ export const bookingHandlers = [
     const token = request.headers.get("x-booking-token") ?? "";
     const existing = clientByPhone(phone);
     if (existing) {
+      // Sin código, un número que ya es de alguien no entrega su perfil: solo lo que se ve sin código.
+      if (unverifiedPhone) {
+        db.bookingSessions.set(token, `${PREVIEW_SESSION}${existing.id}`);
+        return HttpResponse.json(previewCustomerOf(existing));
+      }
       db.bookingSessions.set(token, existing.id);
       return HttpResponse.json(customerOf(existing));
     }
     const client: MockClient = { id: `cli_web_${Date.now().toString(36)}`, name: `${firstName} ${lastName}`, phone, type: "new", visits: 0, cancellations: 0, noShows: 0, lastVisitAt: null, preferredBarberId: null, visitEveryDays: null, notes: [], avatarUrl: null };
     db.calendar.clients = [...db.calendar.clients, client];
     const now = new Date().toISOString();
-    saveProfile(client.id, { ...profileOf(client), email, onlineOnly: false, blocked: false, guests: [], createdAt: now, marketingConsent: { accepted: input.marketing === true, at: now, source: "booking" } });
-    // La sesión del celular pasa a ser la del cliente recién creado.
-    db.bookingSessions.set(token, client.id);
+    saveProfile(client.id, { ...profileOf(client), email, onlineOnly: false, blocked: false, guests: [], createdAt: now, marketingConsent: { accepted: input.marketing === true, at: now, source: "booking", ...consentProof(text(input.branchId) || firstBranchId()) } });
+    // La sesión del celular pasa a ser la del cliente recién creado (sin código, sigue sin código).
+    db.bookingSessions.set(token, unverifiedPhone ? `${PREVIEW_SESSION}${client.id}` : client.id);
     return HttpResponse.json(customerOf(client), { status: 201 });
   }),
 
   http.post(`${BASE}/promo`, async ({ request }) => {
     await delay(LATENCY_MS);
     const input = asRecord(await request.json().catch(() => ({})));
-    const client = sessionClient(request);
-    const result = findPromo(text(input.code), { isNewClient: client ? customerOf(client).isNew : true, appointments: Number(input.appointments) || 1 });
-    if ("problem" in result) return error(422, "promo_invalid", "Ese cupón no aplica.", { problem: result.problem });
+    const client = previewClient(request);
+    // Los cupones son los de la barbería (Configuración › Cupones), con sus fechas y topes.
+    const serviceIds = Array.isArray(input.serviceIds) ? input.serviceIds.filter((id): id is string => typeof id === "string") : [];
+    const result = checkCoupon(text(input.code), { clientId: client?.id ?? null, isNewClient: client ? customerOf(client).isNew : true, appointments: Number(input.appointments) || 1, serviceIds, branchId: text(input.branchId) || firstBranchId() });
+    if ("problem" in result) return error(422, "promo_invalid", COUPON_PROBLEMS[result.problem], { problem: result.problem });
     return HttpResponse.json(result.promo);
   }),
 
   http.post(`${BASE}/reservations`, async ({ request }) => {
     await delay(PAY_LATENCY_MS);
     const input = asRecord(await request.json().catch(() => ({})));
-    // Quien reserva (y a quien se cobra una tarjeta guardada) es el de la sesión verificada.
-    const client = sessionClient(request);
+    // Quien reserva es el de la sesión, con o sin código; cobrarle una tarjeta guardada, su saldo, sus
+    // paquetes o su cortesía sí pide la sesión verificada.
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
+    const verified = sessionClient(request) !== null;
     const branchId = text(input.branchId);
     const items = Array.isArray(input.items) ? input.items : [];
     if (items.length === 0) return error(422, "validation", "Aún no hay citas.");
@@ -413,29 +458,35 @@ export const bookingHandlers = [
     const productLines = (Array.isArray(input.products) ? input.products : []).map((raw) => asRecord(raw as DefaultBodyType)).flatMap((line) => {
       const product = db.products.items.find((item) => item.id === text(line.productId));
       const qty = Math.max(0, Math.floor(Number(line.qty) || 0));
-      return product && qty > 0 ? [{ productId: product.id, name: product.name, qty, price: product.price }] : [];
+      return product && qty > 0 ? [{ productId: product.id, name: product.name, qty, price: productPriceIn(product.id, branchId) }] : [];
     });
+    // En línea no se vende lo que no está en la estantería.
+    const short = productLines.find((line) => stockLevel(branchId, line.productId).onHand < line.qty);
+    if (short) return error(409, "out_of_stock", `Ya no nos quedan suficientes de «${short.name}». Quítalo o baja la cantidad.`);
     const servicesTotal = plan.planned.reduce((sum, item) => sum + item.price, 0);
     const productsTotal = productLines.reduce((sum, line) => sum + line.price * line.qty, 0);
     const customer = customerOf(client);
-    const promoResult = text(input.promoCode) ? findPromo(text(input.promoCode), { isNewClient: customer.isNew, appointments: plan.planned.length }) : null;
+    const promoResult = text(input.promoCode) ? checkCoupon(text(input.promoCode), { clientId: client.id, isNewClient: customer.isNew, appointments: plan.planned.length, serviceIds: plan.planned.flatMap((item) => item.serviceIds), branchId }) : null;
     const promo = promoResult && "promo" in promoResult ? promoResult.promo : null;
     const tip = tipOptions().options.find((option) => option.id === text(input.tipId)) ?? null;
     const method = text(input.method) as MockReservation["payment"]["method"];
     // Cortesía de cliente frecuente: si la pide y tiene una por usar, se descuenta el servicio de cortesía
     // a lo que cobra el barbero de la cita que lo lleva (cada barbero tiene su precio).
-    const loyalty = input.useReward === true ? customer.loyalty : null;
+    const loyalty = verified && input.useReward === true ? customer.loyalty : null;
     const rewardItem = loyalty ? plan.planned.find((item) => item.serviceIds.includes(loyalty.rewardServiceId)) : undefined;
-    const rewardValue = loyalty && loyalty.available > 0 ? ((rewardItem && barberPrice(rewardItem.barberId, loyalty.rewardServiceId)) ?? loyalty.rewardValue) : 0;
+    const rewardValue = loyalty && loyalty.available > 0 ? ((rewardItem && barberPrice(rewardItem.barberId, loyalty.rewardServiceId, branchId)) ?? loyalty.rewardValue) : 0;
     // Paquetes: cada cita con un servicio que tiene visitas por usar se paga con una.
-    const coverage = input.usePackages === true ? coverByPackages(plan.planned.map((item) => item.serviceIds.map((serviceId) => ({ serviceId, price: barberPrice(item.barberId, serviceId) ?? 0 }))), activePackages(client.id)) : { amount: 0, used: {} };
+    const coverage = verified && input.usePackages === true ? coverByPackages(plan.planned.map((item) => item.serviceIds.map((serviceId) => ({ serviceId, price: barberPrice(item.barberId, serviceId, branchId) ?? 0 }))), activePackages(client.id)) : { amount: 0, used: {} };
     // Tarjeta de regalo: paga primero; lo que sobra queda en ella.
     const giftCode = text(input.giftCode);
     const giftCard = giftCode ? findGiftCard(giftCode) : undefined;
     if (giftCode && (!giftCard || giftCard.balance <= 0)) return error(422, "gift_invalid", "Esa tarjeta de regalo no existe o ya no tiene saldo.");
-    const totals = computeTotals({ services: servicesTotal, products: productsTotal, discount: promoDiscount(promo, servicesTotal + productsTotal), taxPercent: taxPercent(), tip: tipAmount(tip, servicesTotal), cardFee: chargesCardFee(method) ? cardFeeRule() : null, giftBalance: giftCard?.balance ?? 0, reward: rewardValue, prepaid: coverage.amount });
+    // Cada línea con su tasa (la del artículo o la de la sucursal): el impuesto es el de esa sucursal.
+    const totals = computeTotals({ services: servicesTotal, products: productsTotal, discount: promoDiscount(promo, servicesTotal + productsTotal), taxPercent: reservationTaxPercent(branchId, plan.planned, productLines), taxInclusive: taxInclusive(), tip: tipAmount(tip, servicesTotal), cardFee: chargesCardFee(method) ? cardFeeRule() : null, giftBalance: giftCard?.balance ?? 0, reward: rewardValue, prepaid: coverage.amount });
 
     const rules = bookingRules();
+    // Lo que se cobra en línea pasa por la pasarela de la sucursal: sin pasarela conectada, solo se paga en la barbería.
+    const onlineMethods = branchOnlineMethods(branchId);
     let payment: MockReservation["payment"];
     if (totals.total === 0 && totals.gift > 0) {
       // La tarjeta de regalo cubre todo: no hay nada más que cobrar.
@@ -446,19 +497,21 @@ export const bookingHandlers = [
       const deposit = customer.depositRequired ? Math.min(depositAmount(totals), totals.total) : 0;
       if (deposit > 0) {
         if (!text(input.savedCardId) && !input.card) return error(422, "card_required", "Elige una tarjeta para el anticipo.", { fields: { card: ["Elige una tarjeta para el anticipo."] } });
-        const charged = chargeCard(client, input, "card");
+        const charged = chargeCard(client, input, "card", verified);
         if (charged instanceof Response) return charged;
         payment = { method, status: "pending", last4: charged.last4, brand: charged.brand, paid: deposit };
       } else {
         payment = { method, status: "pending", last4: null, brand: null, paid: 0 };
       }
     } else if (method === "credit") {
+      if (!verified) return NO_SESSION();
       if (customer.credit < totals.total) return error(422, "validation", "Tu saldo a favor no alcanza para esta reserva.");
       db.booking.credits = { ...db.booking.credits, [client.id]: Math.round((customer.credit - totals.total) * 100) / 100 };
       payment = { method, status: "paid", last4: null, brand: null, paid: totals.total };
-    } else if (method === "card" || method === "wallet") {
-      if (!rules.paymentMethods.card) return error(422, "validation", "Esta barbería no cobra en línea.");
-      const charged = chargeCard(client, input, method);
+    } else if (method === "card" || method === "wallet" || method === "pse" || method === "nequi") {
+      if (!rules.paymentMethods.card || !onlineMethods.includes(method)) return error(422, "validation", "Esta sucursal no recibe ese método de pago en línea.");
+      // PSE y Nequi los aprueba el banco o la app del cliente en la pasarela; el simulado los da por aprobados.
+      const charged = method === "pse" || method === "nequi" ? { last4: null, brand: null } : chargeCard(client, input, method, verified);
       if (charged instanceof Response) return charged;
       payment = { method, status: "paid", last4: charged.last4, brand: charged.brand, paid: totals.total };
     } else {
@@ -479,11 +532,19 @@ export const bookingHandlers = [
     const referencePhotos = (Array.isArray(input.referencePhotos) ? input.referencePhotos : []).map((photo) => text(photo)).filter(Boolean);
     const badPhoto = referencePhotos.length > MAX_REFERENCE_PHOTOS || referencePhotos.some((photo) => !(PHOTO_PATTERN.test(photo) && photo.length <= MAX_PHOTO_CHARS));
     if (badPhoto) return error(422, "validation", "La foto no se pudo subir. Prueba con otra.", { fields: { referencePhotos: ["La foto no se pudo subir. Prueba con otra."] } });
+    const number = `BL-${String(1000 + db.booking.reservations.length + 1)}`;
+    // Lo pagado, la propina y lo descontado quedan en cada cita: la caja cobra solo lo que falta.
+    const online = settlementsOf({ values: plan.planned.map((item, index) => item.price + (index === 0 ? productsTotal : 0)), serviceValues: plan.planned.map((item) => item.price), totals, payment, reservation: number });
     // Varias citas en un solo agendamiento quedan enlazadas en la agenda.
     const linkId = plan.planned.length > 1 ? `lnk_${reservationId}` : null;
     // Las partes de una visita llevan su nota: en la agenda se ve que es la misma persona en dos sillas.
     const partsOf = (visitId: string | null) => (visitId ? plan.planned.filter((other) => other.visitId === visitId).length : 0);
-    const created: MockAppointment[] = plan.planned.map((item, index) => ({
+    // De dónde vino (los `utm_*` del enlace): queda en la reserva y en cada cita, para Métricas › Marketing.
+    const bookingUtm = (() => {
+      const utm = asRecord(input.utm as DefaultBodyType);
+      return text(utm.source) ? { source: text(utm.source).toLowerCase().slice(0, 40), medium: text(utm.medium).slice(0, 40), campaign: text(utm.campaign).slice(0, 60) } : null;
+    })();
+    const drafts: MockAppointment[] = plan.planned.map((item, index) => ({
       id: `apt_web_${Date.now().toString(36)}_${index}`,
       linkId,
       branchId,
@@ -506,11 +567,16 @@ export const bookingHandlers = [
       createdBy: "Reserva en línea",
       history: [{ id: `h_${Math.random().toString(36).slice(2, 9)}`, at: new Date().toISOString(), actor: client.name, event: "created" }],
       payment: null,
+      online: online[index],
+      utm: bookingUtm,
+      confirmToken: newConfirmToken(),
     }));
+    // El producto reservado queda apartado: sale del inventario desde ya y vuelve si se cancela.
+    const created = drafts.map((item) => syncAppointmentStock(item, "online", client.name));
     const lines: MockBookingLine[] = plan.planned.map((item, index) => ({ appointmentId: created[index].id, guestName: item.guestName, guestRelation: item.guestRelation, price: item.price, paid: Math.round(item.price * paidShare * 100) / 100, noPreference: item.noPreference }));
     const reservation: MockReservation = {
       id: reservationId,
-      number: `BL-${String(1000 + db.booking.reservations.length + 1)}`,
+      number,
       createdAt: new Date().toISOString(),
       customerId: client.id,
       branchId,
@@ -518,15 +584,13 @@ export const bookingHandlers = [
       products: productLines,
       promoCode: promo?.code ?? null,
       giftCode: giftCard?.code ?? null,
-      utm: (() => {
-        const utm = asRecord(input.utm as DefaultBodyType);
-        return text(utm.source) ? { source: text(utm.source).slice(0, 40), medium: text(utm.medium).slice(0, 40), campaign: text(utm.campaign).slice(0, 60) } : null;
-      })(),
+      utm: bookingUtm,
       totals,
       payment,
     };
     db.calendar.appointments = [...created, ...db.calendar.appointments];
     db.booking.reservations = [reservation, ...db.booking.reservations];
+    if (promo) redeemCoupon(promo.code, client.id, "booking", reservation.id);
     for (const appointment of created) scheduleMessages(appointment, client.phone);
     rememberGuests(client, plan.planned);
     db.persist();
@@ -544,13 +608,15 @@ export const bookingHandlers = [
     const client = clientByPhone(phone);
     // Un número bloqueado responde como cliente, sin perfil: lo sabe tras el código.
     if (isBlockedPhone(phone, client)) return HttpResponse.json({ returning: true, token: null, customer: null });
-    if (!client) return HttpResponse.json({ returning: false, token: null, customer: null });
-    seedDemoGuests(client);
     const token = `bkp_${crypto.randomUUID()}`;
+    // El nuevo recibe una sesión que solo sirve para crear su ficha: reserva y paga sin código.
+    if (!client) {
+      db.bookingSessions.set(token, `${NEW_PHONE_SESSION}${phone}`);
+      return HttpResponse.json({ returning: false, token, customer: null });
+    }
+    seedDemoGuests(client);
     db.bookingSessions.set(token, `${PREVIEW_SESSION}${client.id}`);
-    // Lo justo para su bienvenida: nada de correo, tarjetas, saldo, paquetes ni membresía hasta el código.
-    const customer = { ...customerOf(client), email: "", cards: [], credit: 0, packages: [], loyalty: null };
-    return HttpResponse.json({ returning: true, token, customer });
+    return HttpResponse.json({ returning: true, token, customer: previewCustomerOf(client) });
   }),
 
   http.post(`${BASE}/otp/request`, async ({ request }) => {
@@ -606,7 +672,7 @@ export const bookingHandlers = [
     const input = asRecord(await request.json().catch(() => ({})));
     const start = text(input.start);
     if (!START.test(start)) return error(422, "validation", "Elige fecha y hora.");
-    const terms = cancellationTerms({ start: new Date(existing.start), now: new Date(), cancelHours: bookingRules().cancelHours, lateFeePercent: 0, price: 0, paid: 0 });
+    const terms = cancellationTerms({ start: startInstant(existing), now: new Date(), cancelHours: bookingRules().cancelHours, lateFeePercent: 0, price: 0, paid: 0 });
     if (!terms.isFree) return error(409, "too_late", `Ya no se puede cambiar en línea: faltan menos de ${bookingRules().cancelHours} h. Llama a la barbería.`);
     const day = start.slice(0, 10);
     const minute = parseClock(start.slice(11, 16));
@@ -638,20 +704,22 @@ export const bookingHandlers = [
     // Es del dueño: pide la sesión de la app, no la del cliente.
     const header = request.headers.get("authorization");
     const appToken = header?.startsWith("Bearer ") ? header.slice(7) : null;
-    if (!ACCOUNTS.some((account) => account.id === (appToken ? db.sessions.get(appToken) : undefined))) return error(401, "unauthorized", "Tu sesión expiró.");
+    if (!accountById(appToken ? db.sessions.get(appToken) : undefined)) return error(401, "unauthorized", "Tu sesión expiró.");
     const days = Math.min(90, Math.max(1, Number(new URL(request.url).searchParams.get("days")) || 30));
     return HttpResponse.json(funnelSummary(days));
   }),
 
   http.post(`${BASE}/packages/buy`, async ({ request }) => {
     await delay(PAY_LATENCY_MS);
-    const client = sessionClient(request);
+    // Con tarjeta nueva, sin código; con una guardada, verificada (`chargeCard`).
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
+    const verified = sessionClient(request) !== null;
     const input = asRecord(await request.json().catch(() => ({})));
     const offer = packageOffers().find((item) => item.id === text(input.packageId));
     if (!offer) return error(404, "not_found", "Ese paquete ya no está a la venta.");
     if (!text(input.savedCardId) && !input.card) return error(422, "card_required", "Elige con qué tarjeta pagas.", { fields: { card: ["Elige con qué tarjeta pagas."] } });
-    const charged = chargeCard(client, input, "card");
+    const charged = chargeCard(client, input, "card", verified);
     if (charged instanceof Response) return charged;
     const owned = buyPackage(client.id, offer);
     db.persist();
@@ -670,8 +738,10 @@ export const bookingHandlers = [
 
   http.post(`${BASE}/gift-cards`, async ({ request }) => {
     await delay(PAY_LATENCY_MS);
-    const client = sessionClient(request);
+    // Con tarjeta nueva, sin código; con una guardada, verificada (`chargeCard`).
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
+    const verified = sessionClient(request) !== null;
     const input = asRecord(await request.json().catch(() => ({})));
     const amount = Math.round(Number(input.amount) * 100) / 100;
     const recipientName = text(input.recipientName);
@@ -682,9 +752,11 @@ export const bookingHandlers = [
     if (recipientContact.replace(/\D/g, "").length < 8) fields.recipientContact = ["Escribe su celular para mandarle el código."];
     if (Object.keys(fields).length > 0) return error(422, "validation", "Revisa los campos marcados.", { fields });
     if (!text(input.savedCardId) && !input.card) return error(422, "card_required", "Elige con qué tarjeta pagas.", { fields: { card: ["Elige con qué tarjeta pagas."] } });
-    const charged = chargeCard(client, input, "card");
+    const charged = chargeCard(client, input, "card", verified);
     if (charged instanceof Response) return charged;
     const card = createGiftCard({ initial: amount, buyerId: client.id, recipientName, recipientContact, message: text(input.message).slice(0, 200) });
+    // Lo que la pantalla promete: el código sale por WhatsApp a quien la recibe.
+    sendGiftCard(card, client.name, text(input.branchId) || "ma", client.name);
     db.persist();
     return HttpResponse.json({ code: card.code, amount: card.initial, sentTo: `•••• ${recipientContact.replace(/\D/g, "").slice(-4)}`, paidWith: `${charged.brand} •••• ${charged.last4}` }, { status: 201 });
   }),
@@ -693,8 +765,8 @@ export const bookingHandlers = [
     await delay(LATENCY_MS);
     const limit = Math.min(20, Math.max(1, Number(new URL(request.url).searchParams.get("limit")) || 5));
     const all = reviewsOf(String(params.id));
-    // Público: solo el nombre con inicial, la nota, el comentario y la fecha.
-    return HttpResponse.json({ items: all.slice(0, limit).map(({ id, clientName, rating, comment, createdAt }) => ({ id, clientName, rating, comment, createdAt })), total: all.length });
+    // Público: solo el nombre con inicial, la nota, el comentario, la fecha y si es de ejemplo (la demo).
+    return HttpResponse.json({ items: all.slice(0, limit).map(({ id, clientName, rating, comment, createdAt, sample }) => ({ id, clientName, rating, comment, createdAt, sample: sample === true })), total: all.length });
   }),
 
   http.post(`${BASE}/appointments/:id/review`, async ({ request, params }) => {
@@ -718,7 +790,7 @@ export const bookingHandlers = [
 
   http.post(`${BASE}/appointments/:id/repeat`, async ({ request, params }) => {
     await delay(LATENCY_MS);
-    const client = sessionClient(request);
+    const client = previewClient(request);
     if (!client) return NO_SESSION();
     const original = db.calendar.appointments.find((item) => item.id === params.id && item.clientId === client.id);
     if (!original || original.status === "cancelled") return error(404, "not_found", "Esa cita no existe.");
@@ -742,7 +814,7 @@ export const bookingHandlers = [
     const done = db.booking.cancellations[client.id] ?? 0;
     if (done >= rules.maxCancellations) return error(409, "limit", "Llegaste al límite de cancelaciones en línea. Llama a la barbería.");
     const view = bookedOf(existing);
-    const terms = cancellationTerms({ start: new Date(existing.start), now: new Date(), cancelHours: rules.cancelHours, lateFeePercent: rules.lateFeePercent, price: view.price, paid: view.paid });
+    const terms = cancellationTerms({ start: startInstant(existing), now: new Date(), cancelHours: rules.cancelHours, lateFeePercent: rules.lateFeePercent, price: view.price, paid: view.paid });
     if (terms.isPast) return error(409, "too_late", "Esa cita ya empezó.");
     const wantsCredit = text(asRecord(await request.json().catch(() => ({}))).refundTo) === "credit";
     const refundTo = terms.refund === 0 ? "none" : wantsCredit ? "credit" : "card";
@@ -754,7 +826,9 @@ export const bookingHandlers = [
       db.booking.reservations = db.booking.reservations.map((item) => (item.id === reservation.id ? reservation : item));
     }
     cancelMessages(existing.id);
-    const updated: MockAppointment = { ...existing, status: "cancelled", history: [...existing.history, { id: `h_${Math.random().toString(36).slice(2, 9)}`, at: new Date().toISOString(), actor: client.name, event: "status:cancelled" }] };
+    // Lo que se devuelve queda en la cita: Transacciones la muestra devuelta, no anulada.
+    const refunds = terms.refund > 0 ? [...(existing.refunds ?? []), { id: `rf_${Date.now().toString(36)}`, amount: terms.refund, to: refundTo === "credit" ? ("credit" as const) : ("card" as const), reason: "Cancelada en línea", at: new Date().toISOString(), by: client.name }] : existing.refunds;
+    const updated: MockAppointment = { ...releaseAppointmentStock(existing, client.name), status: "cancelled", refunds, history: [...existing.history, { id: `h_${Math.random().toString(36).slice(2, 9)}`, at: new Date().toISOString(), actor: client.name, event: "status:cancelled" }] };
     db.calendar.appointments = db.calendar.appointments.map((item) => (item.id === updated.id ? updated : item));
     // El hueco no se pierde: se ofrece a la lista de espera de esa hora.
     offerFreedSlot(existing);
@@ -762,10 +836,10 @@ export const bookingHandlers = [
     return HttpResponse.json({ appointment: bookedOf(updated), fee: terms.fee, refund: terms.refund, refundTo });
   }),
 
-  // Nota y fotos para el barbero, ya con la reserva hecha: se suman a las de sus citas.
+  // Nota y fotos para el barbero, ya con la reserva hecha (con o sin código: es la suya): se suman a las de sus citas.
   http.post(`${BASE}/reservations/:id/details`, async ({ request, params }) => {
     await delay(LATENCY_MS);
-    const client = sessionClient(request);
+    const client = previewClient(request);
     if (!client) return error(403, "booking_session", "Vuelve a pedir el código para agregar tu nota.");
     const reservation = db.booking.reservations.find((item) => item.id === params.id && item.customerId === client.id);
     if (!reservation) return error(404, "not_found", "Esa reserva no existe.");

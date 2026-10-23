@@ -205,16 +205,16 @@ function PayBody({ payment, onChangeTime }: { payment: PaymentController; onChan
 }
 
 /**
- * «Pago» en la Agenda: antes de cobrar, el código que confirma que el celular de
- * la portada es suyo (y la ficha si es la primera vez), igual que en Paso a paso.
- * Verificado, cómo se paga (propina, descuentos, método y tarjeta) y el botón que cobra.
+ * «Pago» en la Agenda: sin código, igual que en Paso a paso (la ficha si es la primera
+ * vez). Luego, cómo se paga (propina, descuentos, método y tarjeta) y el botón que cobra.
  */
 export function AgendaSelectPay({ onChangeTime }: { onChangeTime?: () => void }) {
   const t = useAppT();
   const { state } = useBookingFlow();
-  if (!state.verified || !state.customer) {
+  if (!state.customer) {
+    const isNew = state.verified || state.token !== null;
     return (
-      <StepLayout title={t(state.verified ? "booking.payIdentity.newTitle" : "booking.payIdentity.title")} lead={t(state.verified ? "booking.payIdentity.newLead" : "booking.payIdentity.lead")}>
+      <StepLayout title={t(isNew ? "booking.payIdentity.newTitle" : "booking.payIdentity.whoTitle")} lead={t(isNew ? "booking.payIdentity.newLead" : "booking.payIdentity.whoLead")}>
         <PayIdentity />
       </StepLayout>
     );

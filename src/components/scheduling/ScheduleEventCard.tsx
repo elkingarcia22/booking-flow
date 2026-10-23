@@ -1,5 +1,5 @@
 import * as React from "react";
-import { BadgeCheck, Ban, Check, Footprints, Globe, Link2, Repeat, Star, StickyNote, TriangleAlert, UserRoundPlus, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Ban, CalendarClock, Check, CheckCheck, CircleSlash, Footprints, Globe, Link2, Repeat, Star, StickyNote, TriangleAlert, UserRoundPlus, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/i18n";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,10 @@ const MARKER_ICON: Record<ScheduleMarkerIcon, LucideIcon> = {
   paid: BadgeCheck,
   repeat: Repeat,
   requested: Star,
+  confirmed: CheckCheck,
+  risk: TriangleAlert,
+  reschedule: CalendarClock,
+  declined: CircleSlash,
 };
 
 /** Con menos minutos que esto la tarjeta se considera corta (se usa cuando no llega el alto en píxeles). */
@@ -216,6 +220,7 @@ export const ScheduleEventCard = React.forwardRef<HTMLDivElement, ScheduleEventC
         data-kind={event.kind ?? "appointment"}
         data-tone={tone}
         data-ghost={isGhost || undefined}
+        data-active={(isGhost && event.active) || undefined}
         data-flexible={event.flexible || undefined}
         data-group={group?.id}
         style={style}
@@ -241,6 +246,8 @@ export const ScheduleEventCard = React.forwardRef<HTMLDivElement, ScheduleEventC
           group?.joinTop && "rounded-t-none border-t-0",
           group?.joinBottom && "rounded-b-none border-b-0",
           isGhost && "z-raised border-dashed border-primary/70 bg-primary/5 opacity-85",
+          // Opaca (superficie + tinte de marca encima): lo que hay debajo no se transparenta ni se encima con su texto.
+          isGhost && event.active && "border-2 border-primary bg-surface bg-[linear-gradient(hsl(var(--primary)/0.16),hsl(var(--primary)/0.16))] opacity-100 shadow-md ring-2 ring-primary/25",
           event.muted && "opacity-60",
           event.faded && "opacity-30 saturate-50",
           dragging && "z-raised opacity-90 shadow-lg ring-2 ring-ring/40",

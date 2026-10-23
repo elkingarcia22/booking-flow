@@ -7,11 +7,17 @@ import { cn } from "@/lib/utils"
 import { CommentComposer } from "./CommentComposer"
 import { CommentPin } from "./CommentPin"
 import { useComments } from "./commentsContext"
-import { filterThreads } from "./commentTypes"
+import { filterThreads, type CommentLocation } from "./commentTypes"
 
 export interface CommentLayerProps extends React.ComponentProps<"div"> {
   /** Oculta la pastilla «Haz clic donde quieras comentar · Navegar». */
   hideHint?: boolean
+  /**
+   * Describe dónde cayó el clic (ruta, módulo, sección, elemento) a partir de sus coordenadas en la
+   * ventana. La capa de clics se marca con `data-comment-overlay` para que se pueda saltar al buscar
+   * qué hay debajo.
+   */
+  locate?: (point: { x: number; y: number }) => CommentLocation | undefined
 }
 
 const clamp = (value: number) => Math.min(100, Math.max(0, value))
@@ -26,7 +32,7 @@ const clamp = (value: number) => Math.min(100, Math.max(0, value))
  * En modo navegar el contenido se usa con normalidad (los pins siguen a la
  * vista); `C` o «Comentar» vuelven a comentar y `Esc` o «Navegar» salen.
  */
-export function CommentLayer({ hideHint = false, className, children, ...props }: CommentLayerProps) {
+export function CommentLayer({ hideHint = false, locate, className, children, ...props }: CommentLayerProps) {
   const { threads, open, mode, setMode, draft, setDraft, createThread, selectedId, select, filter, context, currentUser, labels } = useComments()
   const ref = React.useRef<HTMLDivElement>(null)
 
@@ -42,7 +48,12 @@ export function CommentLayer({ hideHint = false, className, children, ...props }
     const box = ref.current?.getBoundingClientRect()
     if (!box || box.width === 0 || box.height === 0) return
     select(null)
-    setDraft({ x: clamp(((event.clientX - box.left) / box.width) * 100), y: clamp(((event.clientY - box.top) / box.height) * 100), context })
+    setDraft({
+      x: clamp(((event.clientX - box.left) / box.width) * 100),
+      y: clamp(((event.clientY - box.top) / box.height) * 100),
+      context,
+      location: locate?.({ x: event.clientX, y: event.clientY }),
+    })
   }
 
   return (
@@ -50,7 +61,7 @@ export function CommentLayer({ hideHint = false, className, children, ...props }
       {children}
       {open && (
         <div className="pointer-events-none absolute inset-0 z-raised">
-          {mode === "comment" && <div aria-hidden className="pointer-events-auto absolute inset-0 cursor-crosshair" onClick={place} />}
+          {mode === "comment" && <div aria-hidden data-comment-overlay className="pointer-events-auto absolute inset-0 cursor-crosshair" onClick={place} />}
 
           {visible.map((thread) => {
             const root = thread.messages[0]

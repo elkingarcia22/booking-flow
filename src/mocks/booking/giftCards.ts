@@ -48,3 +48,25 @@ export function spendGiftCard(code: string, amount: number): number {
   db.booking.giftCards = all().map((item) => (item.code === card.code ? { ...item, balance } : item));
   return balance;
 }
+
+const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+
+/**
+ * Le manda el código a quien recibe la tarjeta: por la misma cola de WhatsApp que los recordatorios (plantilla
+ * `tarjeta_regalo`, de servicio: no pide el permiso de promociones). Lo que la reserva promete («te mandamos el
+ * código») ahora sale. Devuelve el id del mensaje; queda en la tarjeta para mostrar si llegó y reenviarlo.
+ */
+export function sendGiftCard(card: MockGiftCard, fromName: string, branchId: string, by: string): string {
+  const branch = db.settings.lists.branches.find((item) => item.id === branchId);
+  const currency = typeof branch?.currency === "string" ? branch.currency : "USD";
+  const amount = new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 2 }).format(card.balance);
+  const id = `msg_gift_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  const to = `+${card.recipientContact.replace(/\D/g, "")}`;
+  const now = new Date().toISOString();
+  db.booking.outbox = [
+    ...(db.booking.outbox ?? []),
+    { id, appointmentId: "", clientId: card.buyerId ?? "", to, channel: "whatsapp", kind: "giftCard", sendAt: now, status: "scheduled", params: [firstName(card.recipientName), firstName(fromName), amount, card.code], by },
+  ];
+  db.booking.giftCards = all().map((item) => (item.code === card.code ? { ...item, messageId: id } : item));
+  return id;
+}

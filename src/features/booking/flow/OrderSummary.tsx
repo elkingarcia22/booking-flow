@@ -62,7 +62,7 @@ export function OrderSummary({ totals, money, lines, promoCode }: OrderSummaryPr
       {totals.reward > 0 && row(t("booking.loyalty.line"), totals.reward, "positive")}
       {totals.discount > 0 && row(promoCode ? `${t("booking.payment.discount")} · ${promoCode}` : t("booking.payment.discount"), totals.discount, "positive")}
       {row(t("booking.payment.subtotal"), totals.subtotal)}
-      {row(t("booking.payment.tax"), totals.tax)}
+      {row(t(totals.taxIncluded ? "booking.payment.taxIncluded" : "booking.payment.tax"), totals.tax)}
       {totals.tip > 0 && row(t("booking.payment.tipLine"), totals.tip)}
       {totals.fee > 0 && row(totals.feeName ?? t("booking.payment.fee"), totals.fee)}
       {totals.gift > 0 && row(t("booking.gift.line"), totals.gift, "positive")}

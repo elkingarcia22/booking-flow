@@ -60,6 +60,28 @@ export type ChatCard =
   | { kind: "bars"; title: string; rows: readonly { label: string; value: number; display?: string }[] }
   | { kind: "metrics"; title?: string; items: readonly { label: string; value: string; delta?: string; tone?: "positive" | "negative" | "neutral" }[] };
 
+/**
+ * Un cambio que el agente propone y la persona aplica: nada se toca hasta «Aplicar». Muestra el antes
+ * y el después; aplicado, se puede deshacer. `payload` y `undo` son lo que necesita quien lo ejecuta
+ * (`onAction` del chat), en datos planos para que la conversación se pueda guardar.
+ */
+export interface ChatAction {
+  id: string;
+  /** Qué tipo de cambio es («moveAppointment»); lo interpreta quien lo ejecuta. */
+  kind: string;
+  title: string;
+  rows: readonly { label: string; before?: string; after: string }[];
+  /** Lo que conviene saber antes de aplicar (un choque con otra cita, un cliente bloqueado). */
+  warnings?: readonly string[];
+  payload: Readonly<Record<string, unknown>>;
+  status: "proposed" | "applying" | "applied" | "discarded" | "undoing" | "undone" | "failed";
+  /** Con qué se deshace, una vez aplicado. */
+  undo?: Readonly<Record<string, unknown>>;
+  /** Dónde ver el resultado («/calendario?…»). */
+  href?: string;
+  error?: string;
+}
+
 /** Un enlace que la respuesta ofrece («Ver el artículo completo»). */
 export interface ChatLink {
   label: string;
@@ -89,10 +111,14 @@ export interface ChatMessage {
   question?: ChatQuestion;
   card?: ChatCard;
   link?: ChatLink;
+  /** Cambios propuestos para aplicar con un toque. */
+  actions?: readonly ChatAction[];
   /** Qué le pareció a la persona. */
   feedback?: "up" | "down";
   /** Quién respondió (`help`, `demo`, `model`…), para que el siguiente turno siga con el mismo. */
   via?: string;
+  /** Con qué id registró el turno quien respondió: el 👍/👎 se le manda con él. */
+  traceId?: string;
 }
 
 export interface Conversation {
@@ -113,7 +139,9 @@ export interface ChatReply {
   question?: ChatQuestion;
   card?: ChatCard;
   link?: ChatLink;
+  actions?: readonly ChatAction[];
   via?: string;
+  traceId?: string;
 }
 
 /**

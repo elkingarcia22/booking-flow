@@ -1,5 +1,6 @@
 import * as React from "react";
-import type { ChatBackend, ChatState, ChatStore, Conversation } from "@/lib/chat";
+import type { ChatAction, ChatBackend, ChatMessage, ChatState, ChatStore, Conversation } from "@/lib/chat";
+import type { ChatFeedbackPayload } from "./ChatFeedbackForm";
 
 export interface ChatConnector {
   id: string;
@@ -33,6 +34,14 @@ export interface ChatContextValue {
   onOpenFull?: (conversationId: string | null) => void;
   /** Abrir el modo voz; sin esto no hay botón Voz. */
   onOpenVoice?: () => void;
+  /**
+   * Aplicar o deshacer un cambio que propuso el agente. Devuelve cómo queda (`applied` con su `undo`,
+   * `undone`); si falla, lanza un error con el mensaje para la persona. Sin esto, las propuestas no
+   * tienen botón.
+   */
+  onAction?: (action: ChatAction, op: "apply" | "undo") => Promise<Partial<ChatAction>>;
+  /** El 👍/👎 de una respuesta, con los motivos si los dio: para que quien respondió aprenda. */
+  onFeedback?: (message: ChatMessage, value: "up" | "down" | undefined, detail?: ChatFeedbackPayload) => void;
 }
 
 export const ChatContext = React.createContext<ChatContextValue | null>(null);
@@ -57,20 +66,35 @@ export function useActiveConversation(): Conversation | null {
 
 /** Las acciones del chat, ya atadas al almacén y a quien responde. */
 export function useChatActions() {
-  const { store, backend } = useChatContext();
+  const { store, backend, onAction, onFeedback } = useChatContext();
   return React.useMemo(
     () => ({
+      /** Aplica o deshace un cambio propuesto; el estado va quedando en el mensaje. */
+      runAction: async (messageId: string, action: ChatAction, op: "apply" | "undo") => {
+        if (!onAction) return;
+        store.updateAction(messageId, action.id, { status: op === "apply" ? "applying" : "undoing", error: undefined });
+        try {
+          store.updateAction(messageId, action.id, await onAction(action, op));
+        } catch (error) {
+          store.updateAction(messageId, action.id, { status: op === "apply" ? "failed" : "applied", error: error instanceof Error ? error.message : String(error) });
+        }
+      },
+      discardAction: (messageId: string, actionId: string) => store.updateAction(messageId, actionId, { status: "discarded" }),
       send: (text: string) => store.send(text, backend),
       answer: (messageId: string, option: string) => store.answer(messageId, option, backend),
       regenerate: () => store.regenerate(backend),
       edit: (messageId: string, text: string) => store.edit(messageId, text, backend),
       stop: store.stop,
       finish: store.finish,
-      feedback: store.feedback,
+      feedback: (messageId: string, value: "up" | "down" | undefined, detail?: ChatFeedbackPayload) => {
+        store.feedback(messageId, value);
+        const message = store.getState().conversations.flatMap((conversation) => conversation.messages).find((item) => item.id === messageId);
+        if (message) onFeedback?.(message, value, detail);
+      },
       setActive: store.setActive,
       remove: store.remove,
       newConversation: () => store.setActive(null),
     }),
-    [store, backend]
+    [store, backend, onAction, onFeedback]
   );
 }

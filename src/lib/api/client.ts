@@ -17,12 +17,23 @@ export interface RequestOptions<T> {
   headers?: Record<string, string>;
   /** Milisegundos antes de abortar. Por defecto 15 s. */
   timeoutMs?: number;
+  /** Interno: ya se pidió confirmar la identidad para esta petición. */
+  retriedStepUp?: boolean;
 }
 
 export interface ApiAuthBridge {
   getToken: () => string | null;
   /** Se llama ante un 401: la sesión debe cerrarse desde fuera. */
   onUnauthorized?: () => void;
+  /** La confirmación de identidad vigente (`X-Step-Up`), si hay. */
+  getStepUp?: () => string | null;
+  /** El rol con el que se está mirando («Ver como», `X-View-As`): el servidor no deja cambiar nada así. */
+  getViewAs?: () => string | null;
+  /**
+   * El servidor pidió confirmar la identidad: quien escucha pide el código y resuelve `true` cuando
+   * hay una confirmación nueva (se repite la petición una vez) o `false` si la persona desistió.
+   */
+  onStepUpRequired?: () => Promise<boolean>;
 }
 
 export interface ApiClientOptions {
@@ -72,6 +83,7 @@ function toApiError(status: number, body: unknown): ApiError {
 
 /** Códigos que un backend puede mandar y que mapeamos a los nuestros. */
 const CODE_ALIASES: Record<string, ApiError["code"]> = {
+  step_up_required: "step_up_required",
   unauthorized: "unauthorized",
   forbidden: "forbidden",
   not_found: "not_found",
@@ -101,6 +113,10 @@ export function createApiClient({ baseUrl, auth, fetchImpl }: ApiClientOptions):
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const token = auth?.getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
+    const stepUp = auth?.getStepUp?.();
+    if (stepUp) headers["X-Step-Up"] = stepUp;
+    const viewAs = auth?.getViewAs?.();
+    if (viewAs) headers["X-View-As"] = viewAs;
 
     let response: Response;
     try {
@@ -124,6 +140,10 @@ export function createApiClient({ baseUrl, auth, fetchImpl }: ApiClientOptions):
     if (!response.ok) {
       const apiError = toApiError(response.status, parsed);
       if (apiError.code === "unauthorized") auth?.onUnauthorized?.();
+      // Lo sensible: se confirma la identidad y se repite una sola vez.
+      if (apiError.code === "step_up_required" && !options.retriedStepUp && auth?.onStepUpRequired && (await auth.onStepUpRequired())) {
+        return request(method, path, body, { ...options, retriedStepUp: true });
+      }
       throw apiError;
     }
     if (options.schema) {

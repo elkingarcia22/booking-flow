@@ -3,8 +3,22 @@ import { buildFontTokens, buildRadiusTokens, buildSpacingTokens, buildThemeToken
 import { DEFAULT_THEME_ID, findPreset, THEME_PRESETS } from "./presets";
 import { DEFAULT_BODY_FONT, DEFAULT_HEADING_FONT, ensureFontLoaded, findFont, FONT_OPTIONS, isFontId, resolveHeadingFont, type FontId, type HeadingFontId } from "./fonts";
 import { ThemeContext, THEME_STORAGE_KEY, type ThemeContextValue } from "./themeContext";
+import { buildCustomPreset, CUSTOM_THEME_ID, DEFAULT_CUSTOM_COLORS, isCustomColors, type CustomColors } from "./customTheme";
 
-interface StoredTheme {
+/**
+ * Lo que una pantalla fuerza mientras está montada, sin tocar lo guardado: el login usa
+ * solo el preset; la reserva en línea, la apariencia que eligió la barbería entera.
+ */
+export interface ThemeOverride {
+  preset: string;
+  /** Los colores cuando `preset` es «Personalizado». */
+  custom?: CustomColors | null;
+  /** Sin él, el modo que eligió quien mira. */
+  mode?: ThemeMode;
+}
+
+/** Lo que se guarda del tema; también la «foto» que toma Personalización para deshacer. */
+export interface StoredTheme {
   preset: string;
   mode: ThemeMode;
   radius: RadiusScale;
@@ -12,6 +26,8 @@ interface StoredTheme {
   /** Ausente = usar la sugerencia del preset (o Inter). */
   font?: FontId;
   headingFont?: HeadingFontId;
+  /** Los colores del tema «Personalizado»; se guardan aunque se elija otro, para volver a ellos. */
+  custom?: CustomColors;
 }
 
 const DEFAULT_STORED: StoredTheme = { preset: DEFAULT_THEME_ID, mode: "dark", radius: "md", density: "normal" };
@@ -23,12 +39,13 @@ function readStored(): StoredTheme {
     if (!raw) return DEFAULT_STORED;
     const parsed = JSON.parse(raw) as Partial<StoredTheme>;
     return {
-      preset: findPreset(parsed.preset).id,
+      preset: parsed.preset === CUSTOM_THEME_ID ? CUSTOM_THEME_ID : findPreset(parsed.preset).id,
       mode: parsed.mode === "light" || parsed.mode === "system" ? parsed.mode : "dark",
       radius: parsed.radius === "none" || parsed.radius === "sm" || parsed.radius === "lg" ? parsed.radius : "md",
       density: parsed.density === "compact" || parsed.density === "comfortable" ? parsed.density : "normal",
       font: isFontId(parsed.font) ? parsed.font : undefined,
       headingFont: parsed.headingFont === "same" || isFontId(parsed.headingFont) ? parsed.headingFont : undefined,
+      custom: isCustomColors(parsed.custom) ? parsed.custom : undefined,
     };
   } catch {
     return DEFAULT_STORED;
@@ -79,12 +96,25 @@ function applyToDocument(tokens: ThemeTokens, resolvedMode: ResolvedMode, preset
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [stored, setStored] = React.useState<StoredTheme>(readStored);
-  const [presetOverride, setPresetOverride] = React.useState<string | null>(null);
+  // Lo que una pantalla fuerza sin guardarlo (el login, la reserva en línea); `null` = lo elegido.
+  const [override, setOverride] = React.useState<ThemeOverride | null>(null);
   const prefersDark = useSystemPrefersDark();
 
-  const preset = findPreset(presetOverride ?? stored.preset);
-  const resolvedMode: ResolvedMode =
-    stored.mode === "system" ? (prefersDark ? "dark" : "light") : stored.mode;
+  const customColors = stored.custom ?? DEFAULT_CUSTOM_COLORS;
+  const customPreset = React.useMemo(
+    // `customColors` solo cambia de referencia cuando cambian los colores (primario, secundario o IA):
+    // los demás ajustes conservan `stored.custom` al copiar lo guardado.
+    () => buildCustomPreset(customColors),
+    [customColors]
+  );
+  const setPresetOverride = React.useCallback((id: string | null) => setOverride(id ? { preset: id } : null), []);
+  const overrideCustom = override?.custom ?? null;
+  const overridePreset = React.useMemo(() => (overrideCustom ? buildCustomPreset(overrideCustom) : null), [overrideCustom]);
+  const activeId = override?.preset ?? stored.preset;
+  const preset =
+    activeId !== CUSTOM_THEME_ID ? findPreset(activeId) : override?.preset === CUSTOM_THEME_ID ? (overridePreset ?? customPreset) : customPreset;
+  const mode: ThemeMode = override?.mode ?? stored.mode;
+  const resolvedMode: ResolvedMode = mode === "system" ? (prefersDark ? "dark" : "light") : mode;
 
   // La tipografía guardada gana; si no hay, la sugerencia del preset; si no, Inter.
   const font: FontId = stored.font ?? preset.fonts?.body ?? DEFAULT_BODY_FONT;
@@ -119,8 +149,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     () => ({
       preset,
       presets: THEME_PRESETS,
-      setPreset: (id) => setStored((prev) => ({ ...prev, preset: findPreset(id).id })),
+      setPreset: (id) => setStored((prev) => ({ ...prev, preset: id === CUSTOM_THEME_ID ? CUSTOM_THEME_ID : findPreset(id).id })),
+      customColors,
+      setCustomColors: (colors) => setStored((prev) => ({ ...prev, preset: CUSTOM_THEME_ID, custom: colors })),
+      snapshot: stored,
+      restoreSnapshot: (snapshot) => setStored(snapshot),
+      // De fábrica es el color y el modo; radio, densidad y tipografía no se tocan desde Personalización.
+      resetAppearance: () => setStored((prev) => ({ ...prev, preset: DEFAULT_STORED.preset, mode: DEFAULT_STORED.mode, custom: undefined })),
       setPresetOverride,
+      setThemeOverride: setOverride,
       mode: stored.mode,
       setMode: (mode) => setStored((prev) => ({ ...prev, mode })),
       resolvedMode,
@@ -135,7 +172,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       fonts: FONT_OPTIONS,
       tokens,
     }),
-    [preset, stored.mode, stored.radius, stored.density, resolvedMode, tokens, font, headingFont]
+    [preset, customColors, stored, resolvedMode, setPresetOverride, tokens, font, headingFont]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

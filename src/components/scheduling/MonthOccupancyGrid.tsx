@@ -24,6 +24,8 @@ export interface MonthOccupancyDay {
   occupancy: number | null;
   /** Cuántas citas lleva el día. */
   count: number;
+  /** Una marca pequeña junto al número del día (p. ej. «día pesado»); va fuera del botón, con su propio tooltip. */
+  marker?: React.ReactNode;
 }
 
 export interface MonthOccupancyGridProps {
@@ -80,7 +82,7 @@ export function MonthOccupancyGrid({ month, days, selected, onSelectDay, today, 
             const countLabel = info ? (info.count === 0 ? t("schedule.noAppointments") : t("schedule.appointments", { count: info.count })) : "";
             const label = `${capitalize(format(date, "EEEE d 'de' MMMM", { locale: dateLocale }))}${percent === null ? `, ${t("schedule.notWorking")}` : `, ${t("schedule.occupancy")} ${percent}%`}${countLabel ? `, ${countLabel}` : ""}`;
             return (
-              <div key={date.toISOString()} role="gridcell" className="border-b border-r border-border p-1 last:border-r-0">
+              <div key={date.toISOString()} role="gridcell" className="relative border-b border-r border-border p-1 last:border-r-0">
                 <button
                   type="button"
                   aria-label={label}
@@ -117,6 +119,7 @@ export function MonthOccupancyGrid({ month, days, selected, onSelectDay, today, 
                     )
                   )}
                 </button>
+                {!outside && info?.marker && <span className="absolute right-2 top-2">{info.marker}</span>}
               </div>
             );
           })}

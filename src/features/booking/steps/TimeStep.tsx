@@ -11,6 +11,7 @@ import { IconTile } from "@/components/utility/IconTile";
 import { ThemaIcon } from "@/icons";
 import { clockMinutes, dayKeyOf, firstBookableDay, initialsOf, isSameDayAs, isTodayOver, parseStart, toStart } from "../bookingFormat";
 import { AlternativeBarbers } from "../flow/AlternativeBarbers";
+import { WindowAlternatives } from "../flow/WindowAlternatives";
 import { NextToPart } from "../flow/NextToPart";
 import { useBookingFlow } from "../flow/BookingContext";
 import { StepLayout } from "../flow/StepLayout";
@@ -148,6 +149,11 @@ export function TimeStep() {
           loading={isWaiting}
           size={touch}
         />
+      )}
+
+      {/* Le faltan franjas al barbero elegido: en esas, otros que sí tienen horas. */}
+      {!isWaiting && free.size > 0 && (
+        <WindowAlternatives day={day} barberWindows={windows.map((group) => group.window)} isBlocked={(time) => isBlocked(parseStart(`${dayKeyOf(day)}T${time}`))} />
       )}
 
       {hidesBusy && !isWaiting && (
