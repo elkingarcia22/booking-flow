@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CommentThread } from "../../../components/comments/commentTypes";
+import type { CommentThread } from "../../../components/comments/commentTypes.js";
 
 /**
  * Los comentarios de revisión se guardan como un registro de acciones, no como el estado final: cada

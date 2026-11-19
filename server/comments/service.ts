@@ -11,7 +11,7 @@ export interface Reply {
 export interface CommentsService {
   /** Todo el registro de acciones, en el orden en que se guardó. */
   list(): Promise<Reply>;
-  /** Agrega acciones al registro; las que ya estaban (mismo id) no se repiten. */
+  /** Agrega acciones al registro; las que ya estaban (mismo id) no se repiten. Eliminar borra las filas del hilo. */
   record(payload: unknown): Promise<Reply>;
 }
 
@@ -66,8 +66,12 @@ export function createCommentsService(options: CommentsServiceOptions): Comments
         // Reintentar un envío no duplica filas: las acciones que ya están (mismo id) se descartan.
         const existing = new Set((await target.read()).map((event) => event.id));
         const fresh: CommentEvent[] = parsed.data.events.filter((event) => !existing.has(event.id));
-        if (fresh.length > 0) await target.append(fresh);
-        return { status: 200, body: { saved: fresh.length } };
+        // Eliminar quita el hilo de la hoja (si el almacén sabe hacerlo) en vez de dejar una fila «delete».
+        const removed = target.removeThreads ? new Set(fresh.filter((event) => event.action === "delete").map((event) => event.threadId)) : new Set<string>();
+        const kept = fresh.filter((event) => !removed.has(event.threadId));
+        if (kept.length > 0) await target.append(kept);
+        if (removed.size > 0) await target.removeThreads?.([...removed]);
+        return { status: 200, body: { saved: kept.length, removed: removed.size } };
       });
     },
   };

@@ -1,6 +1,14 @@
 {
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
+    "target": "ES2023",
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [

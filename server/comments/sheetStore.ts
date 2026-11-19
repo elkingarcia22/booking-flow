@@ -3,7 +3,8 @@ import type { GoogleClient } from "../feedback/google.js";
 
 /**
  * Donde viven los comentarios: una hoja de Google con una fila por acción (comentar, responder,
- * resolver, reabrir, eliminar). Solo se agregan filas; leerla en orden reconstruye cada hilo.
+ * resolver, reabrir). Leerla en orden reconstruye cada hilo. Eliminar un comentario quita de la hoja
+ * todas las filas de su hilo: quien abre la hoja no debe seguir viendo lo que se borró.
  *
  * Como la del feedback, la hoja se encuentra por una propiedad de Drive y no por un id guardado:
  * el servidor no tiene estado y cualquier instancia llega a la misma.
@@ -20,6 +21,8 @@ const RANGE = `${ACTIONS_TAB}!A:${String.fromCharCode(64 + COLUMNS.length)}`;
 export interface CommentsStore {
   read(): Promise<CommentEvent[]>;
   append(events: readonly CommentEvent[]): Promise<void>;
+  /** Quita todas las filas de esos hilos. Sin él, eliminar se guarda como una fila más («delete»). */
+  removeThreads?(threadIds: readonly string[]): Promise<void>;
 }
 
 export const toRow = (event: CommentEvent): string[] => [
@@ -160,6 +163,20 @@ export function createSheetStore(client: GoogleClient, options: { sheetId?: stri
       const params = new URLSearchParams({ valueInputOption: "RAW", insertDataOption: "INSERT_ROWS" });
       // RAW: el texto se guarda tal cual; un comentario que empiece por «=» no se evalúa como fórmula.
       await client.json(`${SHEETS}/${id}/values/${encodeURIComponent(RANGE)}:append?${params}`, { body: { values: events.map(toRow) } });
+    },
+    async removeThreads(threadIds) {
+      const id = await ensure();
+      const doomed = new Set(threadIds);
+      const meta = await client.json<{ sheets?: { properties: { sheetId: number; title: string } }[] }>(`${SHEETS}/${id}?fields=sheets.properties(sheetId,title)`);
+      const tab = meta.sheets?.find((sheet) => sheet.properties.title === ACTIONS_TAB)?.properties.sheetId;
+      if (tab === undefined) return;
+      const result = await client.json<{ values?: string[][] }>(`${SHEETS}/${id}/values/${encodeURIComponent(`${ACTIONS_TAB}!C:C`)}`);
+      // Índices de fila (0 es la cabecera) de los hilos a borrar, de abajo hacia arriba: así borrar una no corre las demás.
+      const rows = (result.values ?? []).flatMap((row, index) => (index > 0 && doomed.has(row[0] ?? "") ? [index] : [])).reverse();
+      if (rows.length === 0) return;
+      await client.json(`${SHEETS}/${id}:batchUpdate`, {
+        body: { requests: rows.map((index) => ({ deleteDimension: { range: { sheetId: tab, dimension: "ROWS", startIndex: index, endIndex: index + 1 } } })) },
+      });
     },
   };
 }

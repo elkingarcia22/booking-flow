@@ -23,10 +23,6 @@
           "value": "nosniff"
         },
         {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
         },
@@ -41,7 +37,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com; font-src 'self' https://fonts.gstatic.com https://cdn.fontshare.com data:; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://www.googleapis.com; frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.wompi.co https://www.mercadopago.com; object-src 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com; font-src 'self' https://fonts.gstatic.com https://cdn.fontshare.com data:; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://www.googleapis.com https://barberlytics.github.io; frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.wompi.co https://www.mercadopago.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' http://localhost:3100 https://*.vercel.app"
         }
       ]
     }
